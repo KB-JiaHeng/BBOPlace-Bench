@@ -197,18 +197,18 @@ class GPEvaluator:
             remaining = deadline - time.time()
             if remaining <= 0:
                 self._cleanup_worker()
-                return {}
+                return INF
             r, _, _ = select.select([self._sock], [], [], remaining)
             if not r:
                 self._cleanup_worker()
-                return {}
+                return INF
 
             data = b""
             while True:
                 remaining = deadline - time.time()
                 if remaining <= 0:
                     self._cleanup_worker()
-                    return {}
+                    return INF
 
                 chunk = self._sock.recv(65536)
                 if not chunk:

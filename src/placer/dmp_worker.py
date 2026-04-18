@@ -133,6 +133,7 @@ class DMPWorker:
 
     def handle_place(self, msg: dict) -> dict:
         params_update = msg.get("params_update")
+
         if isinstance(params_update, dict):
             self.params.fromJson(params_update)
         with th.no_grad():

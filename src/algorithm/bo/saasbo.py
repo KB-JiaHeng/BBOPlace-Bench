@@ -12,25 +12,20 @@ import math
 import psutil
 from collections import deque
 from copy import deepcopy
+
+# from botorch import fit_fully_bayesian_model_nuts
+from botorch.fit import fit_fully_bayesian_model_nuts
+# from botorch.acquisition import ExpectedImprovement
+from botorch.acquisition.monte_carlo import qExpectedImprovement 
+    
+from botorch.models.fully_bayesian import SaasFullyBayesianSingleTaskGP
+
 from gpytorch.kernels import Kernel
 from botorch.optim import optimize_acqf
-from botorch.models import FixedNoiseGP
-from botorch.models import SingleTaskGP
-from botorch.acquisition import UpperConfidenceBound
 from botorch.utils.transforms import normalize, unnormalize
-try:
-    from botorch import fit_gpytorch_mll
-except:
-    from botorch import fit_gpytorch_model as fit_gpytorch_mll
-from botorch.acquisition import ExpectedImprovement
+from botorch.models.transforms.outcome import Standardize
+
 from .kernel import TransformedCategorical, OrderKernel, CombinedOrderKernel
-
-# for kernel
-from gpytorch.priors import LogNormalPrior
-from gpytorch.kernels import RBFKernel
-from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch.constraints import Interval, Positive
-
 from utils.debug import * 
 from utils.constant import INF
 from utils.data_utils import FeatureCache 
@@ -89,9 +84,9 @@ class IntegerRandomSampling(FloatRandomSampling):
 
 from placer.basic_placer import evaluate_placer
 
-class BO(BasicAlgo):
+class SAASBO(BasicAlgo):
     def __init__(self, args, placer, logger):
-        super(BO, self).__init__(args=args, placer=placer, logger=logger)
+        super(SAASBO, self).__init__(args=args, placer=placer, logger=logger)
         
         self.n_var = placer.placedb.node_cnt
         
@@ -101,7 +96,11 @@ class BO(BasicAlgo):
         self.batch_size = self.args.batch_size
         
         self.acqf_type = self.args.acqf_type 
-        self.kernel_type = self.args.kernel_type
+        self.kernel_type = None
+
+        self.warmup_steps = self.args.warmup_steps
+        self.num_samples = self.args.num_samples
+        self.thinning = self.args.thinning
         
         if args.placer == "mgo":
             self.problem = MaskGuidedOptimizationPlacementProblem(
@@ -157,29 +156,19 @@ class BO(BasicAlgo):
         assert not torch.isnan(train_X).any() and not torch.isinf(train_X).any()
         assert not torch.isnan(train_Y).any() and not torch.isinf(train_Y).any()
         
-        kernel = self._get_kernel(self.kernel_type)
-        noise_prior = LogNormalPrior(loc=-4.0, scale=1.0)  # 0.12+ 默认噪声先验
-        likelihood = GaussianLikelihood(
-            noise_prior=noise_prior,
-            noise_constraint=Positive()
+        model = SaasFullyBayesianSingleTaskGP(
+            train_X, train_Y,
+            outcome_transform=Standardize(m=1)
         ).to(**tkwargs)
-
-        # model = SingleTaskGP(train_X, train_Y,
-        #                      covar_module=kernel).to(**tkwargs)
-        model = SingleTaskGP(
-            train_X=train_X,
-            train_Y=train_Y,
-            covar_module=kernel,
-            likelihood=likelihood,
-        ).to(**tkwargs)
-
-
-        mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model).to(**tkwargs)
         if state_dict is not None:
             model.load_state_dict(state_dict)
-        with gpytorch.settings.cholesky_jitter(1e-4):
-            fit_gpytorch_mll(mll)
-        
+        fit_fully_bayesian_model_nuts(
+            model,
+            warmup_steps=self.warmup_steps,
+            num_samples=self.num_samples,
+            thinning=self.thinning,
+            disable_progbar=True,
+        )
         return model
     
     def _init_samples(self, n_samples):  
@@ -196,32 +185,12 @@ class BO(BasicAlgo):
         return x, hpwl.reshape(-1, 1)
     
     def _get_kernel(self, kernel_type):
-        lognormal_loc = math.sqrt(2) + math.log(math.sqrt(self.dim))
-        lognormal_scale = math.sqrt(3)
-        lengthscale_prior = LogNormalPrior(
-            loc=lognormal_loc,
-            scale=lognormal_scale
-        )
-        lengthscale_constraint = Interval(lower_bound=1e-4, upper_bound=1e4)
-        # lengthscale_constraint = None
-
         if kernel_type.lower() == "tc":
-            kernel = TransformedCategorical(
-                lengthscale_prior=lengthscale_prior,
-                lengthscale_constraint=lengthscale_constraint
-            )
+            kernel = TransformedCategorical()
         elif kernel_type.lower() == "comb_order":
             kernel = CombinedOrderKernel(n=self.placer.placedb.node_cnt)
-            kernel.kernel1.lengthscale_prior = lengthscale_prior
-            kernel.kernel1.lengthscale_constraint = lengthscale_constraint
-            kernel.kernel2.lengthscale_prior = lengthscale_prior
-            kernel.kernel2.lengthscale_constraint = lengthscale_constraint
         elif kernel_type.lower() == "default":
-            kernel = RBFKernel(
-                ard_num_dims=self.dim,  
-                lengthscale_prior=lengthscale_prior,
-                lengthscale_constraint=lengthscale_constraint
-            )
+            kernel = None 
         else:
             raise NotImplementedError
         return kernel 
@@ -229,7 +198,7 @@ class BO(BasicAlgo):
             
     def _get_acqf(self, acqf_type, model, train_X: Tensor, train_Y: Tensor):
         if acqf_type == 'EI':
-            AF = ExpectedImprovement(
+            AF = qExpectedImprovement(
                 model, best_f=train_Y.min().item(), maximize=False).to(**tkwargs)
             
         elif acqf_type == 'LCB_lower_bound':
@@ -404,7 +373,7 @@ class BO(BasicAlgo):
     def _load_checkpoint(self):
         if hasattr(self.args, "checkpoint") and os.path.exists(self.args.checkpoint):
             super()._load_checkpoint()
-            checkpoint_path = os.path.join(self.args.checkpoint, "bo.pt")
+            checkpoint_path = os.path.join(self.args.checkpoint, "saasbo.pt")
             checkpoint = torch.load(checkpoint_path)
             self.start_from_checkpoint = True
         else:
@@ -417,7 +386,7 @@ class BO(BasicAlgo):
     def _save_checkpoint(self):
         super()._save_checkpoint()
         
-        model_file = os.path.join(self.checkpoint_path, "bo.pt")
+        model_file = os.path.join(self.checkpoint_path, "saasbo.pt")
         self.model = self.model.to("cpu")
         checkpoint = {
             "model_state_dict": self.model.state_dict(),

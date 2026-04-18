@@ -10,21 +10,22 @@ import os
 
 
 class BasicSampling():
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
         self.args = args
         self.placer = placer
+
+        if n_repeat is None:
+            self.n_repeat = self.args.n_sampling_repeat
+        else:
+            self.n_repeat = n_repeat
     
     def _do(self, problem, n_samples, **kwargs):
-        n_repeat = self.args.n_sampling_repeat
-        # n_solution_in_memory = max(n_samples, self.args.n_solution_in_memory)
-        # n_solution_in_memory = min(n_samples * n_repeat, n_solution_in_memory)
-        # n_iter = math.ceil(n_samples * n_repeat / n_solution_in_memory)
 
         X, y_all, overlap_rate, macro_pos_all = self._sampling_do(problem=problem,
-                                                n_samples=n_samples * n_repeat,
+                                                n_samples=n_samples * self.n_repeat,
                                                 kwargs=kwargs)
         sorted_indices = np.argsort(y_all)
-        if n_repeat > 1:
+        if self.n_repeat > 1:
             self.args.record_func(
                 hpwl=y_all[sorted_indices[n_samples:]], 
                 overlap_rate=overlap_rate[sorted_indices[n_samples:]],
@@ -32,40 +33,6 @@ class BasicSampling():
             ) 
         return X[sorted_indices[:n_samples]]
 
-        # X, Y = None, None
-        # macro_pos_all = []
-        # y_all = None
-        # for i_iter in range(n_iter):
-        #     if i_iter == n_iter -1:
-        #         n_sample_per_iter = n_samples * n_repeat - n_solution_in_memory * i_iter
-        #     else:
-        #         n_sample_per_iter = n_solution_in_memory
-            
-        #     x, y, overlap_rate, macro_pos = self._sampling_do(problem=problem,
-        #                                         n_samples=n_sample_per_iter,
-        #                                         kwargs=kwargs)
-            
-        #     macro_pos_all += macro_pos
-        #     if X is None and Y is None and y_all is None:
-        #         X = x
-        #         Y = y
-        #         y_all = y
-        #     else:
-        #         X = np.concatenate([X, x], axis=0)
-        #         Y = np.concatenate([Y, y], axis=0)
-        #         y_all = np.concatenate([y_all, y], axis=0)
-
-        #     best_n_indices = np.argsort(Y)[:n_samples]
-        #     X = X[best_n_indices]
-        #     Y = Y[best_n_indices]
-        
-        # if n_repeat > 1:
-        #     self.args.record_func(
-        #         hpwl=y_all[np.argsort(y_all)[n_samples:]], 
-        #         overlap_rate=overlap_rate,
-        #         macro_pos_all=list(np.array(macro_pos_all)[np.argsort(y_all)[n_samples:]])
-        #     ) 
-        # return X
     
     @abstractmethod
     def _sampling_do(self, problem, n_samples, **kwargs):
@@ -76,8 +43,8 @@ class BasicSampling():
 ###################################################################
 
 class GrideGuideSingleRandomSampling(BasicSampling, IntegerRandomSampling):
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
-        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint)
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
+        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint, n_repeat=n_repeat)
         IntegerRandomSampling.__init__(self)
         self.args = args 
         self.placer = placer
@@ -92,8 +59,8 @@ class GrideGuideSingleRandomSampling(BasicSampling, IntegerRandomSampling):
 
 
 class GrideGuideRandomSampling(BasicSampling, IntegerRandomSampling):
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
-        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint)
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
+        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint, n_repeat=n_repeat)
         IntegerRandomSampling.__init__(self)
         self.args = args 
         self.placer = placer 
@@ -107,8 +74,8 @@ class GrideGuideRandomSampling(BasicSampling, IntegerRandomSampling):
 
     
 class GrideGuideSpiralSampling(BasicSampling, Sampling):
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
-        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint)
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
+        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint, n_repeat=n_repeat)
         Sampling.__init__(self)
         self.args = args
         self.placer = placer
@@ -204,7 +171,7 @@ class GrideGuideSpiralSampling(BasicSampling, Sampling):
 ###################################################################
 
 class _SPRandomSampling(PermutationRandomSampling):
-    def __init__(self, args, placer) -> None:
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
         super(_SPRandomSampling, self).__init__()
         self.args = args
         self.placer = placer
@@ -225,8 +192,8 @@ class _SPRandomSampling(PermutationRandomSampling):
         return X
     
 class SPRandomSampling(BasicSampling, _SPRandomSampling):
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
-        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint)
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
+        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint, n_repeat=n_repeat)
         _SPRandomSampling.__init__(self, args=args, placer=placer)
     
     def _sampling_do(self, problem, n_samples, **kwargs):
@@ -240,8 +207,8 @@ class SPRandomSampling(BasicSampling, _SPRandomSampling):
 #  Hyperparameter sampling
 ###################################################################
 class HyperparameterSampling(BasicSampling, Sampling):
-    def __init__(self, args, placer, use_checkpoint=True) -> None:
-        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint)
+    def __init__(self, args, placer, use_checkpoint=True, n_repeat=None) -> None:
+        BasicSampling.__init__(self, args=args, placer=placer, use_checkpoint=use_checkpoint, n_repeat=n_repeat)
         Sampling.__init__(self)
 
     def _sampling_do(self, problem, n_samples, **kwargs):

@@ -30,7 +30,7 @@ parser.add_argument("--default_n_seed", type=int, default=5, help="default amoun
 
 args = parser.parse_args()
 
-mean_std_format = r"(\d+\.\d+)\$\\pm\$(\d+\.\d+)"
+mean_std_format = r"(\d+\.\d+)\$\\pm\$(\d+(\.\d+)?)"
 n_seed_format   = r"n_seed=(\d+)"
 
 class NotabilityAnalysis:
@@ -101,12 +101,12 @@ class NotabilityAnalysis:
                              (result_df['algorithm'] == algo)].empty:
                 result_df.loc[(result_df['placer'] == placer) &\
                               (result_df['algorithm'] == algo),
-                              self.benchmark] = f"{mean_std_str} " + ('-' if p < 0.05 else '+')
+                              self.benchmark] = f"{mean_std_str} " + ('-' if p < 0.05 else '$\\approx$')
             else:
                 row = dict.fromkeys(header, " ")
                 row["placer"] = placer
                 row["algorithm"] = algo
-                row[self.benchmark] = f"{method_value_map[method]['mean_std_str']} " + ('-' if p < 0.05 else '+')
+                row[self.benchmark] = f"{method_value_map[method]['mean_std_str']} " + ('-' if p < 0.05 else '$\\approx$')
                 result_df.loc[len(result_df)] = row
         
         result_df = self._highlight_best_two(result_df=result_df, ascending=True)
@@ -179,7 +179,10 @@ class NotabilityAnalysis:
         return pvalue
     
     def _highlight_best_two(self, result_df, ascending=True):
-        means = result_df[self.benchmark].apply(lambda x: float(x.split('$\pm$')[0].strip()))
+        try:
+            means = result_df[self.benchmark].apply(lambda x: float(x.split('$\pm$')[0].strip()))
+        except:
+            import pdb; pdb.set_trace()
 
         sorted_means = means.sort_values(ascending=ascending)
         best_two = sorted_means.head(2).index

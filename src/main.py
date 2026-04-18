@@ -16,6 +16,7 @@ from logger import Logger
 from utils.debug import *
 from utils.random_parser import set_seed
 from utils.res2sheet import res2sheet
+from utils.res2sheet_incre import res2sheet_incre
 
 sys.path.append(ROOT_DIR)
 sys.path.append(THIRDPARTY_DIR)
@@ -164,6 +165,16 @@ if __name__ == "__main__":
         os.makedirs(sheet_path, exist_ok=True)
         result_path = os.path.join(ROOT_DIR, f"results/{args.benchmark}/{args.name}/{args.placer}/{args.algorithm}")
         res2sheet(args=args, sheet_path=sheet_path, res_path=result_path)
+    elif args.run_mode == "result_incre":
+        origin_sheet_path = os.path.join(ROOT_DIR, "sheets", f"{args.benchmark_base}.csv")
+        target_sheet_path = os.path.join(ROOT_DIR, "sheets", f"{args.benchmark_base}_incre.csv")
+        result_path = os.path.join(ROOT_DIR, f"results/{args.benchmark}/{args.name}/{args.placer}/{args.algorithm}")
+        res2sheet_incre(
+            args=args, 
+            origin_sheet_path=origin_sheet_path, 
+            target_sheet_path=target_sheet_path, 
+            res_path=result_path
+        )
     else:
         raise NotImplementedError
     logging.info("Exit Main")

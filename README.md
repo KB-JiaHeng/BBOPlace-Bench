@@ -14,6 +14,12 @@ Please first install docker and [docker cuda toolkit](https://docs.nvidia.com/da
 ```bash
 docker pull duketomlist/bboplace-bench:2.1.0
 ```
+**Run container as non-root user** (optional): To avoid generated files owned by root, start the container with your host UID/GID so output files have correct ownership:
+```bash
+docker run -it --user $(id -u):$(id -g) -v $(pwd):/workspace -w /workspace duketomlist/bboplace-bench:2.1.0 bash
+```
+Replace `bash` with your actual command. If the image uses GPU, add `--gpus all` before the image name.
+
 Please compile `thirdparty/DREAMPlace_source` in the docker container following the below commands:
 ```bash
 cd thirdparty/DREAMPlace_source
