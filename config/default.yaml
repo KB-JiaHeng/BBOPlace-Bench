@@ -1,4 +1,5 @@
-placer : mgp
+name : hsea_hw5
+placer : mgo
 algorithm : ea
 
 benchmark : adaptec1

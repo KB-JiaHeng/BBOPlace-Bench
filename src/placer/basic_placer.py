@@ -16,7 +16,7 @@ import sys
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-@ray.remote(num_cpus=1, num_gpus=0.1)
+@ray.remote(num_cpus=1, num_gpus=0)
 def evaluate_placer(placer, x0):
     return placer._evaluate(x0)
 

@@ -152,7 +152,7 @@ class Evaluator:
     def evaluate(self, x):
         if isinstance(x, list):
             x = np.array(x)
-        if x.shape == 1:
+        if x.ndim == 1:
             x = x.reshape(1, -1)
 
         hpwl, overlap_rate, macro_pos = self.placer.evaluate(x)

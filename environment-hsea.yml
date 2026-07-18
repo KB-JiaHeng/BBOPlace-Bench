@@ -1,0 +1,22 @@
+name: hsea26-hw5
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - setuptools<81
+  - pip:
+      - numpy==1.26.4
+      - scipy==1.11.4
+      - pymoo==0.6.1.1
+      - ray==2.9.3
+      - pandas==2.0.3
+      - matplotlib==3.7.5
+      - shapely==2.0.6
+      - cairocffi==1.6.1
+      - python-igraph==0.11.6
+      - pyyaml==6.0.2
+      - psutil==5.9.8
+      - wandb==0.17.0
+      - pytest==8.3.5
+      - gdown==6.1.0

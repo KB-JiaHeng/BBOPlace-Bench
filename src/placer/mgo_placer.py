@@ -50,7 +50,7 @@ class MaskGuidedOptimizationPlacer(BasicPlacer):
             scaled_size_y = self.scale_size[macro]["size_y"]
 
             position_mask = np.ones(shape=(self.n_grid_x, self.n_grid_y)) * INF
-            position_mask[:self.n_grid_x - scaled_size_x, :self.n_grid_y - scaled_size_y] = 1
+            position_mask[:self.n_grid_x - scaled_size_x + 1, :self.n_grid_y - scaled_size_y + 1] = 1
             wire_mask = np.ones(shape=(self.n_grid_x, self.n_grid_y)) * 0.1
 
             for placed_macro in placed_macro_grid_pos:
