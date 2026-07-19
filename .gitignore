@@ -33,3 +33,5 @@ sock_path
 **.sh
 /experiments/task1_runs/
 /experiments/task1_analysis/
+/.task1_tmp/
+/experiments/v2_smoke_tmp/

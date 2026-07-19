@@ -225,12 +225,19 @@ if __name__ == "__main__":
     num_cpus = min(args.n_cpu_max, cpus)
         
 
+    ray_temp_dir = os.environ.get(
+        "RAY_TMPDIR", os.path.expanduser("~/tmp")
+    )
+    os.makedirs(ray_temp_dir, exist_ok=True)
+    ray_num_gpus = 1 if args.eval_gp_hpwl else 0
+
     ray.init(
         num_cpus=num_cpus,
-        num_gpus=1,
+        num_gpus=ray_num_gpus,
+        object_store_memory=int(args.ray_object_store_memory_mb * 1024 * 1024),
         include_dashboard=False,
         logging_level=logging.ERROR,
-        _temp_dir=os.path.expanduser('~/tmp'),
+        _temp_dir=ray_temp_dir,
         ignore_reinit_error=True,
         runtime_env={"env_vars": {"CUDA_VISIBLE_DEVICES": f"{args.gpu}"}}
     )

@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -45,8 +47,8 @@ class Configuration:
 def load_protocol() -> dict:
     with PROTOCOL_PATH.open() as f:
         protocol = yaml.safe_load(f)
-    if protocol["status"] != "frozen" or protocol["protocol_version"] != 1:
-        raise RuntimeError("Task 1 protocol is not frozen at version 1")
+    if protocol["status"] != "frozen" or protocol["protocol_version"] != 2:
+        raise RuntimeError("Task 1 protocol is not frozen at version 2")
     return protocol
 
 
@@ -74,6 +76,7 @@ def command_for(
     seed: int,
     mode: str,
     max_evals: int,
+    cpus_per_run: int,
 ) -> list[str]:
     name = f"task1_{mode}__{config.label}"
     values = {
@@ -89,7 +92,8 @@ def command_for(
         "use_wandb": False,
         "eval_gp_hpwl": False,
         "gpu": 0,
-        "n_cpu_max": 12,
+        "n_cpu_max": cpus_per_run,
+        "ray_object_store_memory_mb": 512,
         "n_grid_x": 224,
         "n_grid_y": 224,
         "rank_key": "area_sum",
@@ -207,6 +211,7 @@ def run_one(
     mode: str,
     max_evals: int,
     mode_dir: Path,
+    cpus_per_run: int,
 ) -> Path:
     key = f"seed_{seed}__{config.label}"
     manifest_path = mode_dir / f"{key}.json"
@@ -216,7 +221,9 @@ def run_one(
         print(f"[skip] {key} -> {completed}", flush=True)
         return completed
 
-    command = command_for(python, config, seed, mode, max_evals)
+    command = command_for(
+        python, config, seed, mode, max_evals, cpus_per_run
+    )
     name = next(arg.split("=", 1)[1] for arg in command if arg.startswith("--name="))
     log_path = mode_dir / f"{key}.log"
     started_at = time.time()
@@ -228,9 +235,23 @@ def run_one(
         "command": command,
         "started_at_unix": started_at,
         "log_path": str(log_path),
+        "temp_directory_id": hashlib.sha256(key.encode()).hexdigest()[:12],
     }
     with manifest_path.open("w") as f:
         json.dump(manifest, f, indent=2)
+
+    temp_base = Path(
+        os.environ.get("TASK1_TMP_ROOT", str(ROOT / ".task1_tmp"))
+    ).resolve()
+    short_id = hashlib.sha256(key.encode()).hexdigest()[:12]
+    isolated_root = temp_base / short_id
+    ray_tmp = isolated_root / "r"
+    tmp_dir = isolated_root / "t"
+    mpl_dir = isolated_root / "m"
+    cache_dir = isolated_root / "c"
+    wandb_dir = isolated_root / "w"
+    for directory in [ray_tmp, tmp_dir, mpl_dir, cache_dir, wandb_dir]:
+        directory.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
     env.update(
@@ -240,7 +261,12 @@ def run_one(
             "MKL_NUM_THREADS": "1",
             "OPENBLAS_NUM_THREADS": "1",
             "NUMEXPR_NUM_THREADS": "1",
-            "CUDA_VISIBLE_DEVICES": "0",
+            "CUDA_VISIBLE_DEVICES": "",
+            "RAY_TMPDIR": str(ray_tmp),
+            "TMPDIR": str(tmp_dir),
+            "MPLCONFIGDIR": str(mpl_dir),
+            "XDG_CACHE_HOME": str(cache_dir),
+            "WANDB_DIR": str(wandb_dir),
         }
     )
 
@@ -303,6 +329,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=["smoke", "formal"])
     parser.add_argument("--python", default=sys.executable)
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--cpus-per-run", type=int, default=12)
     return parser.parse_args()
 
 
@@ -325,22 +353,70 @@ def main() -> None:
     total = len(configurations) * len(seeds)
     print(
         f"Task 1 {args.mode}: {total} runs, max_evals={max_evals}, "
-        "12 CPU workers per run, sequential processes",
+        f"{args.cpus_per_run} CPUs per run, {args.workers} concurrent runs",
         flush=True,
     )
 
-    for index, (seed, config) in enumerate(
-        scheduled_runs(configurations, seeds, schedule_seed), start=1
-    ):
-        print(f"[{index}/{total}]", end=" ", flush=True)
-        run_one(
+    runs = list(scheduled_runs(configurations, seeds, schedule_seed))
+
+    if args.cpus_per_run != protocol["compute"]["cpus_per_run"]:
+        raise ValueError(
+            f"cpus_per_run={args.cpus_per_run} violates protocol value "
+            f"{protocol['compute']['cpus_per_run']}"
+        )
+    if args.workers < 1:
+        raise ValueError("workers must be positive")
+    if args.workers > protocol["compute"]["concurrent_runs"]:
+        raise ValueError(
+            f"workers={args.workers} exceeds protocol cap "
+            f"{protocol['compute']['concurrent_runs']}"
+        )
+    if args.workers * args.cpus_per_run > protocol["compute"]["total_cpu_limit"]:
+        raise ValueError("Remote total CPU limit exceeded")
+    if args.mode == "smoke" and args.workers != 1:
+        raise ValueError("Smoke tests must run sequentially")
+
+    def execute(run: tuple[int, Configuration]) -> Path:
+        seed, config = run
+        return run_one(
             python=args.python,
             config=config,
             seed=seed,
             mode=args.mode,
             max_evals=max_evals,
             mode_dir=mode_dir,
+            cpus_per_run=args.cpus_per_run,
         )
+
+    if args.workers == 1:
+        for index, run in enumerate(runs, start=1):
+            print(f"[{index}/{total}]", end=" ", flush=True)
+            execute(run)
+    else:
+        # Create one trusted initial-population hash per seed before launching
+        # other configurations of that seed concurrently. Anchors themselves
+        # run concurrently across the five different seeds.
+        anchors = [
+            (seed, Configuration("main", "uniform", "swap"))
+            for seed in seeds
+        ]
+        anchor_set = set(anchors)
+        with ThreadPoolExecutor(max_workers=min(args.workers, len(anchors))) as pool:
+            futures = {pool.submit(execute, run): run for run in anchors}
+            for future in as_completed(futures):
+                future.result()
+
+        remaining = [run for run in runs if run not in anchor_set]
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            futures = {pool.submit(execute, run): run for run in remaining}
+            completed = 0
+            for future in as_completed(futures):
+                future.result()
+                completed += 1
+                print(
+                    f"[parallel progress] {completed}/{len(remaining)}",
+                    flush=True,
+                )
 
     if args.mode == "formal":
         subprocess.run(

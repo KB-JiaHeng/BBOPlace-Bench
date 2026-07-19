@@ -28,8 +28,9 @@ n_max_saving_placement : 1
 # for memory saving purpose
 n_solution_in_memory : 50
 
-# ray init
+# ray init: each Task 1 run uses 12 CPUs; remote scheduler caps 8 concurrent runs.
 n_cpu_max : 12
+ray_object_store_memory_mb : 512
 
 eval_gp_hpwl : False
 

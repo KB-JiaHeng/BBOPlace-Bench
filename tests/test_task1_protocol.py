@@ -1,7 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
+import importlib.util
 import sys
+
+import yaml
 
 import numpy as np
 
@@ -136,6 +139,37 @@ class Task1ProtocolTest(TestCase):
             self.assertIn("F", individual.evaluated)
             self.assertNotIn("G", individual.evaluated)
             self.assertIn("H", individual.evaluated)
+
+    def test_remote_cpu_limits_are_explicit_and_bounded(self):
+        with (ROOT / "config" / "default.yaml").open() as f:
+            default = yaml.safe_load(f)
+        with (ROOT / "experiments" / "task1_protocol.yaml").open() as f:
+            protocol = yaml.safe_load(f)
+
+        self.assertEqual(default["n_cpu_max"], 12)
+        self.assertEqual(default["ray_object_store_memory_mb"], 512)
+        self.assertEqual(protocol["protocol_version"], 2)
+        self.assertEqual(protocol["compute"]["cpus_per_run"], 12)
+        self.assertEqual(protocol["compute"]["concurrent_runs"], 8)
+        self.assertEqual(protocol["compute"]["total_cpu_limit"], 96)
+        self.assertEqual(
+            protocol["compute"]["cpus_per_run"]
+            * protocol["compute"]["concurrent_runs"],
+            protocol["compute"]["total_cpu_limit"],
+        )
+
+        runner_path = ROOT / "experiments" / "run_task1.py"
+        spec = importlib.util.spec_from_file_location("task1_runner", runner_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        config = module.Configuration("main", "uniform", "swap")
+        command = module.command_for(
+            sys.executable, config, 1, "formal", 10000, 12
+        )
+        self.assertIn("--n_cpu_max=12", command)
+        self.assertIn("--ray_object_store_memory_mb=512", command)
+        self.assertNotIn("--n_cpu_max=96", command)
 
     def test_exact_budget_handles_final_partial_batch(self):
         pop_size = 4

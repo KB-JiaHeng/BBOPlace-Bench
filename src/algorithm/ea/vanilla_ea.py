@@ -225,6 +225,7 @@ class VanillaEA(BasicAlgo):
             "record_evaluation_trace": True,
             "eval_gp_hpwl": False,
             "n_cpu_max": 12,
+            "ray_object_store_memory_mb": 512,
         }
         smoke_test = bool(getattr(self.args, "task1_smoke_test", False))
         for key, expected in required.items():

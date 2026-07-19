@@ -1,6 +1,9 @@
-protocol_version: 1
+protocol_version: 2
 frozen_at: "2026-07-19"
 status: frozen
+change_from_v1: >-
+  Execution-only update: formal runs move from local sequential execution to
+  bounded parallel execution on usc-e2. Algorithmic settings are unchanged.
 
 scope:
   task: 1
@@ -112,15 +115,23 @@ sensitivity:
 total_formal_runs: 70
 
 compute:
-  logical_cpus: 12
+  remote_host: usc-e2
+  remote_host_logical_cpus: 256
+  cpus_per_run: 12
   n_cpu_max: 12
-  one_experiment_process_at_a_time: true
+  concurrent_runs: 8
+  total_cpu_limit: 96
+  maximum_host_cpu_fraction: 0.375
   ray_worker_cpus: 1
-  gpu_index_visible: 0
+  ray_object_store_memory_mb_per_run: 512
   gpu_used_by_objective: false
+  gpu_resources_requested_per_run: 0
+  isolated_single_root_directory: true
   note: >-
     The agreed MGO HPWL evaluator is CPU-only. Enabling DREAMPlace GPU HPWL
-    would change the objective evaluator and violate this protocol.
+    would change the objective evaluator and violate this protocol. Parallel
+    execution changes wall-clock time only; each run remains an independent
+    process with the same seed, operators, budget, and 12-CPU setting.
   omp_num_threads_per_worker: 1
   mkl_num_threads_per_worker: 1
   openblas_num_threads_per_worker: 1
