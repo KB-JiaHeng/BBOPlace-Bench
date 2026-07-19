@@ -1,23 +1,24 @@
+"""Algorithm registry with optional dependencies loaded defensively."""
+
 REGISTRY = {}
 
 from .ea.vanilla_ea import VanillaEA
-from .bo.bo import BO 
-# from .bo.saasbo import SAASBO
-from .sa.sa import SA
-from .ea.es import ES
-from .ea.pso import PSO
-from .rs.rs import RS
 
 REGISTRY["ea"] = VanillaEA
-REGISTRY["bo"] = BO
-# REGISTRY["saasbo"] = SAASBO
-REGISTRY["sa"] = SA
-REGISTRY["es"] = ES
-REGISTRY["pso"] = PSO
-REGISTRY["rs"] = RS
 
-try:
-    from .bo.saasbo import SAASBO
-    REGISTRY["saasbo"] = SAASBO
-except:
-    pass
+
+def _register_optional(key, module_name, class_name):
+    try:
+        module = __import__(module_name, fromlist=[class_name])
+        cls = getattr(module, class_name)
+    except (ImportError, ModuleNotFoundError):
+        return
+    REGISTRY[key] = cls
+
+
+_register_optional("bo", "algorithm.bo.bo", "BO")
+_register_optional("sa", "algorithm.sa.sa", "SA")
+_register_optional("es", "algorithm.ea.es", "ES")
+_register_optional("pso", "algorithm.ea.pso", "PSO")
+_register_optional("rs", "algorithm.rs.rs", "RS")
+_register_optional("saasbo", "algorithm.bo.saasbo", "SAASBO")

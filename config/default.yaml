@@ -29,7 +29,7 @@ n_max_saving_placement : 1
 n_solution_in_memory : 50
 
 # ray init
-n_cpu_max : 10
+n_cpu_max : 12
 
 eval_gp_hpwl : False
 

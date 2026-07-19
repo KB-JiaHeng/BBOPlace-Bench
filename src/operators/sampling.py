@@ -29,7 +29,11 @@ class BasicSampling():
             macro_pos=self._selected_macro_pos,
         )
         for individual in population:
-            individual.evaluated.update(("F", "G", "H"))
+            individual.evaluated.add("F")
+            if problem.n_ieq_constr == 0:
+                individual.evaluated.add("G")
+            if problem.n_eq_constr == 0:
+                individual.evaluated.add("H")
         return population
 
     def _do(self, problem, n_samples, **kwargs):

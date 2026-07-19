@@ -25,7 +25,9 @@ class MaskGuidedOptimizationPMMutation(PM):
     def __init__(self, args):
         super().__init__(
             repair=RoundingRepair(),
-            prob=args.pm_prob, eta=args.pm_eta
+            prob=args.pm_prob,
+            prob_var=args.pm_prob_var,
+            eta=args.pm_eta,
         )
 
 class MaskGuidedOptimizationSwapMutation(Mutation):

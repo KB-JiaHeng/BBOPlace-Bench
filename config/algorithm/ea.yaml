@@ -1,13 +1,27 @@
-mutation : swap
-crossover : uniform
-sampling : random
+mutation: swap
+crossover: uniform
+sampling: random
 
-n_population : 50
+# Task 1 fixed population and budget mechanics
+n_population: 20
+n_sampling_repeat: 1
+n_offsprings: 20
+eliminate_duplicates: true
+duplicate_retry_limit: 100
+checkpoint_enabled: false
+record_evaluation_trace: true
+task1_smoke_test: false
+task1_family: main
 
-pm_prob : 1.0
-pm_eta : 30.0
+# Crossover: every mating performs crossover; variable-level settings are explicit.
+crossover_prob: 1.0
+uniform_prob_var: 0.5
+sbx_prob_var: 0.5
+sbx_prob_exch: 1.0
+sbx_prob_bin: 0.5
+sbx_eta: 30.0
 
-sbx_prob : 1.0
-sbx_eta : 30.0
-
-n_sampling_repeat : 5
+# Polynomial mutation: every individual and every scalar variable are mutated.
+pm_prob: 1.0
+pm_prob_var: 1.0
+pm_eta: 30.0

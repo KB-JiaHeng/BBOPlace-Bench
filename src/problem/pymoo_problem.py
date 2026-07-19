@@ -34,8 +34,8 @@ class MaskGuidedOptimizationPlacementProblem(PlacementProblem):
             n_var=self.node_cnt * 2,
             xl=np.zeros(self.node_cnt * 2),
             xu=np.array(
-                ([self.n_grid_x] * self.node_cnt) + \
-                    ([self.n_grid_y] * self.node_cnt)
+                ([self.n_grid_x - 1] * self.node_cnt) + \
+                    ([self.n_grid_y - 1] * self.node_cnt)
             ),
             placer=placer
         )

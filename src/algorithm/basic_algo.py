@@ -1,5 +1,8 @@
 import os
-import torch
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
 import numpy as np
 import logging
 import pickle
@@ -30,7 +33,7 @@ class BasicAlgo:
         pass
 
     def _record_results(self, hpwl, overlap_rate, macro_pos_all, t_each_eval=0, avg_t_each_eval=0, avg_t_eval_solution=0):
-        if isinstance(hpwl, torch.Tensor):
+        if torch is not None and isinstance(hpwl, torch.Tensor):
             hpwl = hpwl.detach().cpu().numpy()
         hpwl = hpwl.flatten()
         best_idx = np.argmin(hpwl)

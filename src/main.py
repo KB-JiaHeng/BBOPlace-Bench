@@ -3,6 +3,11 @@ import sys
 import yaml
 import psutil
 import datetime
+import json
+import platform
+import shutil
+import socket
+import subprocess
 import traceback
 
 sys.path.append(os.path.abspath(".."))
@@ -52,6 +57,77 @@ def process_benchmark_path(benchmark):
 def set_error_log(file):
     error_log = open(file, 'a')
     os.dup2(error_log.fileno(), 2)
+
+
+def _serializable_config_value(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_serializable_config_value(v) for v in value]
+    if isinstance(value, dict):
+        return {
+            str(k): _serializable_config_value(v) for k, v in value.items()
+        }
+    return str(value)
+
+
+def save_run_metadata(args):
+    resolved = {
+        key: _serializable_config_value(value)
+        for key, value in sorted(vars(args).items())
+        if key not in {"logger", "record_func"}
+    }
+    with open(
+        os.path.join(args.result_path, "resolved_config.yaml"),
+        "w",
+    ) as f:
+        yaml.safe_dump(resolved, f, sort_keys=True)
+
+    def git_output(*git_args):
+        return subprocess.check_output(
+            ["git", "-C", ROOT_DIR, *git_args],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+
+    try:
+        git_commit = git_output("rev-parse", "HEAD")
+        git_status = git_output("status", "--porcelain")
+    except Exception:
+        git_commit = None
+        git_status = "unavailable"
+
+    import numpy
+    import pymoo
+
+    metadata = {
+        "command": sys.argv,
+        "hostname": socket.gethostname(),
+        "python_version": platform.python_version(),
+        "numpy_version": numpy.__version__,
+        "pymoo_version": pymoo.__version__,
+        "git_commit": git_commit,
+        "git_status": git_status,
+        "pythonhashseed": os.environ.get("PYTHONHASHSEED"),
+        "cpu_count_visible": cpus,
+        "n_cpu_max": args.n_cpu_max,
+        "gpu_index": args.gpu,
+        "objective_evaluator": (
+            "dreamplace_gp_hpwl" if args.eval_gp_hpwl else "cpu_comp_res"
+        ),
+    }
+    with open(
+        os.path.join(args.result_path, "runtime_metadata.json"),
+        "w",
+    ) as f:
+        json.dump(metadata, f, indent=2)
+
+    protocol_path = os.path.join(ROOT_DIR, "experiments", "task1_protocol.yaml")
+    if os.path.exists(protocol_path):
+        shutil.copy2(
+            protocol_path,
+            os.path.join(args.result_path, "task1_protocol.yaml"),
+        )
 
 
 def process_args():
@@ -119,6 +195,7 @@ def single_run(args):
     args.result_path = os.path.join(ROOT_DIR, 
                                     f"results/{args.benchmark}/{args.name}/{args.placer}/{args.algorithm}/{args.unique_token}")
     os.makedirs(args.result_path, exist_ok=True)
+    save_run_metadata(args)
 
     # set error log
     error_log_file = os.path.join(args.result_path, "error.log")

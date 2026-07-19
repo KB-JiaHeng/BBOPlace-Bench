@@ -3,7 +3,7 @@ from src.utils.debug import *
 from src.utils.compute_res import comp_res, comp_overlap
 from src.utils.read_benchmark.read_aux import write_pl
 from src.utils.read_benchmark.read_def import write_def
-from src.utils.constant import get_n_power
+from src.utils.constant import INF, get_n_power
 
 from typing import overload
 
@@ -61,6 +61,37 @@ class BasicPlacer:
             
         self.t_eval_solution_total = 0
 
+        # True objective-evaluation accounting and per-evaluation trace.  This is
+        # maintained by the placer because both initial sampling and pymoo call
+        # this same evaluate() method.
+        self.true_n_eval = 0
+        self.evaluation_batch_id = 0
+        self.trace_best_hpwl = INF
+        self.record_evaluation_trace = bool(
+            getattr(args, "record_evaluation_trace", False)
+        )
+        self.initial_evaluation_count = (
+            int(getattr(args, "n_population", 0))
+            * int(getattr(args, "n_sampling_repeat", 1))
+        )
+        self.evaluation_trace_file = os.path.join(
+            args.result_path, "evaluation_trace.csv"
+        )
+        if self.record_evaluation_trace:
+            with open(self.evaluation_trace_file, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    [
+                        "evaluation_id",
+                        "batch_id",
+                        "batch_index",
+                        "phase",
+                        "hpwl",
+                        "best_so_far_hpwl",
+                        "overlap_rate",
+                    ]
+                )
+
     def _evaluate(self, x):
         # t = time.time()
         macro_pos = self._genotype2phenotype(x)
@@ -92,6 +123,35 @@ class BasicPlacer:
             overlap_rate_all.append(overlap_rate)
             macro_pos_all.append(macro_pos)
         self.t_eval_solution_total += t_eval_solution
+
+        self.evaluation_batch_id += 1
+        trace_rows = []
+        for batch_index, (hpwl, overlap_rate) in enumerate(
+            zip(hpwl_all, overlap_rate_all)
+        ):
+            self.true_n_eval += 1
+            self.trace_best_hpwl = min(self.trace_best_hpwl, float(hpwl))
+            phase = (
+                "initialization"
+                if self.true_n_eval <= self.initial_evaluation_count
+                else "evolution"
+            )
+            trace_rows.append(
+                [
+                    self.true_n_eval,
+                    self.evaluation_batch_id,
+                    batch_index,
+                    phase,
+                    float(hpwl),
+                    float(self.trace_best_hpwl),
+                    float(overlap_rate),
+                ]
+            )
+
+        if self.record_evaluation_trace and trace_rows:
+            with open(self.evaluation_trace_file, "a", newline="") as f:
+                csv.writer(f).writerows(trace_rows)
+
         return hpwl_all, overlap_rate_all, macro_pos_all
 
     def save_placement(self, macro_pos, n_eval, hpwl):

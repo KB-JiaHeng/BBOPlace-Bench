@@ -31,3 +31,5 @@ benchmarks_bk
 sheets_v*
 sock_path
 **.sh
+/experiments/task1_runs/
+/experiments/task1_analysis/

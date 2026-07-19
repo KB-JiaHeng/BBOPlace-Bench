@@ -1,6 +1,7 @@
 from pymoo.core.crossover import Crossover
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.crossover.ux import UX
+from pymoo.util.misc import crossover_mask
 from pymoo.operators.crossover.ox import OrderCrossover
 from pymoo.operators.repair.rounding import RoundingRepair
 from utils.debug import *
@@ -9,7 +10,7 @@ import numpy as np
 
 class DummyCrossover(Crossover):
     def __init__(self, args):
-        super().__init__(2, 2, prob=0.9)
+        super().__init__(2, 2, prob=args.crossover_prob)
     
     def _do(self, problem, X, **kwargs):
         return X
@@ -23,13 +24,26 @@ class GuidGuideSBXCrossover(SBX):
     def __init__(self, args):
         super().__init__(
             repair=RoundingRepair(),
-            prob=args.sbx_prob, eta=args.sbx_eta
+            prob=args.crossover_prob,
+            prob_var=args.sbx_prob_var,
+            eta=args.sbx_eta,
+            prob_exch=args.sbx_prob_exch,
+            prob_bin=args.sbx_prob_bin,
+            n_offsprings=2,
         )
 
 class MaskGuidedOptimizationUniformCrossover(UX):
     def __init__(self, args):
-        super(MaskGuidedOptimizationUniformCrossover, self).__init__()
+        super(MaskGuidedOptimizationUniformCrossover, self).__init__(
+            prob=args.crossover_prob
+        )
         self.args = args
+        self.prob_var = float(args.uniform_prob_var)
+
+    def _do(self, problem, X, **kwargs):
+        _, n_matings, n_var = X.shape
+        mask = np.random.random((n_matings, n_var)) < self.prob_var
+        return crossover_mask(X, mask)
 
 ###################################################################
 #  SP crossover

@@ -1,0 +1,171 @@
+protocol_version: 1
+frozen_at: "2026-07-19"
+status: frozen
+
+scope:
+  task: 1
+  purpose: >-
+    Compare the mechanisms, convergence behaviour, final HPWL, stability,
+    and crossover-mutation interaction of the existing MGO EA operators.
+  excludes:
+    - new operator design
+    - dummy-operator ablations
+    - population-size sensitivity
+    - multi-objective optimization
+    - checkpoint resume
+
+problem:
+  benchmark: adaptec1
+  placer: mgo
+  algorithm: ea
+  objective: hpwl
+  objective_evaluator: cpu_comp_res
+  n_grid_x: 224
+  n_grid_y: 224
+  rank_key: area_sum
+
+budget:
+  population_size: 20
+  offspring_target_per_generation: 20
+  random_initial_population_size: 20
+  sampling: random
+  sampling_repeat: 1
+  true_objective_evaluations: 10000
+  exact_budget_required: true
+  final_partial_batch_allowed: true
+  random_immigrants_on_duplicate_shortfall: false
+
+randomness:
+  seeds: [1, 2, 3, 4, 5]
+  pythonhashseed_equals_seed: true
+  independent_process_per_run: true
+  identical_initial_population_required_within_seed: true
+  execution_order:
+    blocking: seed
+    randomize_configurations_within_seed: true
+    schedule_seed: 20260719
+
+selection_and_survival:
+  selection: binary_tournament_by_constraint_violation_then_fitness
+  constraints: none
+  effective_parent_selection: binary_tournament_by_lower_hpwl
+  survival: fitness_survival
+  replacement: elitist_mu_plus_lambda
+  merge_current_population_and_offspring: true
+  survivors: 20
+
+crossover:
+  overall_probability: 1.0
+  types:
+    uniform:
+      variable_exchange_probability: 0.5
+    sbx:
+      variable_probability: 0.5
+      exchange_probability: 1.0
+      binomial_probability: 0.5
+      offspring_per_mating: 2
+      main_eta: 30.0
+
+mutation:
+  individual_probability: 1.0
+  types:
+    - swap
+    - shift
+    - random_resetting
+    - shuffle
+    - pm
+  pm:
+    variable_probability: 1.0
+    main_eta: 30.0
+    rounding_repair: true
+
+duplicate_handling:
+  eliminate_duplicate_genotypes: true
+  compare_against_current_population: true
+  compare_within_new_offspring: true
+  retry_limit_per_generation: 100
+  allow_fewer_than_20_unique_offspring: true
+  continue_until_exact_evaluation_budget: true
+  zero_unique_offspring_action: fail_run
+
+main_factorial:
+  crossovers: [uniform, sbx]
+  mutations: [swap, shift, random_resetting, shuffle, pm]
+  configurations: 10
+  runs_per_configuration: 5
+  total_runs: 50
+
+sensitivity:
+  sbx_eta:
+    crossover: sbx
+    mutation: swap
+    values: [5.0, 15.0, 30.0]
+    main_experiment_includes: 30.0
+  pm_eta:
+    crossover: uniform
+    mutation: pm
+    values: [5.0, 15.0, 30.0]
+    main_experiment_includes: 30.0
+  additional_configurations: 4
+  additional_runs: 20
+
+total_formal_runs: 70
+
+compute:
+  logical_cpus: 12
+  n_cpu_max: 12
+  one_experiment_process_at_a_time: true
+  ray_worker_cpus: 1
+  gpu_index_visible: 0
+  gpu_used_by_objective: false
+  note: >-
+    The agreed MGO HPWL evaluator is CPU-only. Enabling DREAMPlace GPU HPWL
+    would change the objective evaluator and violate this protocol.
+  omp_num_threads_per_worker: 1
+  mkl_num_threads_per_worker: 1
+  openblas_num_threads_per_worker: 1
+
+software:
+  pymoo: 0.6.1.1
+
+logging:
+  per_evaluation_trace:
+    columns:
+      - evaluation_id
+      - batch_id
+      - batch_index
+      - phase
+      - hpwl
+      - best_so_far_hpwl
+      - overlap_rate
+  per_generation_metrics: true
+  duplicate_statistics: true
+  initial_population_npz: true
+  initial_population_sha256: true
+  resolved_config: true
+  runtime_metadata: true
+  run_completion_marker: true
+
+visualization:
+  common:
+    x_axis: true_objective_evaluations
+    y_axis: best_so_far_hpwl
+    smoothing: none
+    aggregation: mean
+    uncertainty: plus_minus_one_standard_deviation
+    checkpoints_every: 20
+    lower_is_better: true
+    formats: [pdf, png]
+    export_plot_data_csv: true
+  figures:
+    - uniform_mutation_convergence
+    - sbx_mutation_convergence
+    - final_hpwl_heatmap_2_by_5
+    - crossover_mutation_interaction
+    - final_hpwl_distribution
+    - sbx_eta_sensitivity
+    - pm_eta_sensitivity
+  tables:
+    - final_summary
+    - checkpoint_summary_at_20_1000_5000_10000
+    - duplicate_summary
