@@ -8,3 +8,4 @@ pymoo==0.6.1.1
 PyYAML==6.0.2
 wandb==0.17.0
 psutil==5.9.8
+igraph==0.11.6
