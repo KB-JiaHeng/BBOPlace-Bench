@@ -29,7 +29,10 @@ import datetime
 import logging
 import yaml
 import ray
-from src.placer.hpo_placer import params_space
+try:
+    from src.placer.hpo_placer import params_space
+except (ImportError, ModuleNotFoundError):
+    params_space = None
 
 
 
@@ -114,6 +117,8 @@ class Evaluator:
             node_cnt = self.placer.placedb.node_cnt 
             return node_cnt * 2
         elif self.args.placer == "hpo":
+            if params_space is None:
+                raise ImportError("HPO placer dependencies are not available")
             return len(params_space.keys())
         else:
             raise ValueError(f"Not supported placer {self.args.placer}")
@@ -124,6 +129,8 @@ class Evaluator:
             node_cnt = self.placer.placedb.node_cnt 
             return np.zeros(node_cnt * 2)
         elif self.args.placer == "hpo":
+            if params_space is None:
+                raise ImportError("HPO placer dependencies are not available")
             extract = lambda ent_i: \
                 [entry[ent_i] for entry in params_space.values()]
             return np.array(extract(0))
@@ -143,6 +150,8 @@ class Evaluator:
             node_cnt = self.placer.placedb.node_cnt 
             return np.array([node_cnt] * node_cnt * 2)
         elif self.args.placer == "hpo":
+            if params_space is None:
+                raise ImportError("HPO placer dependencies are not available")
             extract = lambda ent_i: \
                 [entry[ent_i] for entry in params_space.values()]
             return np.array(extract(1))
