@@ -121,6 +121,7 @@ compute:
   n_cpu_max: 12
   concurrent_runs: 8
   total_cpu_limit: 96
+  nice_level: 10
   maximum_host_cpu_fraction: 0.375
   ray_worker_cpus: 1
   ray_object_store_memory_mb_per_run: 512

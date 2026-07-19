@@ -212,6 +212,7 @@ def run_one(
     max_evals: int,
     mode_dir: Path,
     cpus_per_run: int,
+    nice_level: int,
 ) -> Path:
     key = f"seed_{seed}__{config.label}"
     manifest_path = mode_dir / f"{key}.json"
@@ -224,6 +225,7 @@ def run_one(
     command = command_for(
         python, config, seed, mode, max_evals, cpus_per_run
     )
+    launch_command = ["nice", "-n", str(nice_level), *command]
     name = next(arg.split("=", 1)[1] for arg in command if arg.startswith("--name="))
     log_path = mode_dir / f"{key}.log"
     started_at = time.time()
@@ -232,7 +234,7 @@ def run_one(
         "mode": mode,
         "seed": seed,
         "configuration": asdict(config),
-        "command": command,
+        "command": launch_command,
         "started_at_unix": started_at,
         "log_path": str(log_path),
         "temp_directory_id": hashlib.sha256(key.encode()).hexdigest()[:12],
@@ -273,7 +275,7 @@ def run_one(
     print(f"[start] {key}", flush=True)
     with log_path.open("w") as log:
         process = subprocess.run(
-            command,
+            launch_command,
             cwd=SRC,
             env=env,
             stdout=log,
@@ -386,6 +388,7 @@ def main() -> None:
             max_evals=max_evals,
             mode_dir=mode_dir,
             cpus_per_run=args.cpus_per_run,
+            nice_level=protocol["compute"]["nice_level"],
         )
 
     if args.workers == 1:

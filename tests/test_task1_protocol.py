@@ -152,6 +152,7 @@ class Task1ProtocolTest(TestCase):
         self.assertEqual(protocol["compute"]["cpus_per_run"], 12)
         self.assertEqual(protocol["compute"]["concurrent_runs"], 8)
         self.assertEqual(protocol["compute"]["total_cpu_limit"], 96)
+        self.assertEqual(protocol["compute"]["nice_level"], 10)
         self.assertEqual(
             protocol["compute"]["cpus_per_run"]
             * protocol["compute"]["concurrent_runs"],
