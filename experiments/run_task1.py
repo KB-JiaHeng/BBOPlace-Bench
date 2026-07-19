@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 import time
@@ -285,6 +286,12 @@ def run_one(
 
     manifest["returncode"] = process.returncode
     manifest["finished_at_unix"] = time.time()
+    if process.returncode == 0:
+        shutil.rmtree(isolated_root, ignore_errors=True)
+        manifest["temporary_directory_removed"] = True
+    else:
+        manifest["temporary_directory_removed"] = False
+
     if process.returncode != 0:
         manifest["status"] = "failed"
         with manifest_path.open("w") as f:
