@@ -112,8 +112,11 @@ def save_run_metadata(args):
         "cpu_count_visible": cpus,
         "n_cpu_max": args.n_cpu_max,
         "gpu_index": args.gpu,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "objective_evaluator": (
-            "dreamplace_gp_hpwl" if args.eval_gp_hpwl else "cpu_comp_res"
+            "task2_cpu_hpwl_plus_unmodified_dreamplace_rudy"
+            if args.algorithm == "task2_moea"
+            else ("dreamplace_gp_hpwl" if args.eval_gp_hpwl else "cpu_comp_res")
         ),
     }
     with open(
@@ -122,11 +125,16 @@ def save_run_metadata(args):
     ) as f:
         json.dump(metadata, f, indent=2)
 
-    protocol_path = os.path.join(ROOT_DIR, "experiments", "task1_protocol.yaml")
+    protocol_name = (
+        "task2_protocol.yaml"
+        if args.algorithm == "task2_moea"
+        else "task1_protocol.yaml"
+    )
+    protocol_path = os.path.join(ROOT_DIR, "experiments", protocol_name)
     if os.path.exists(protocol_path):
         shutil.copy2(
             protocol_path,
-            os.path.join(args.result_path, "task1_protocol.yaml"),
+            os.path.join(args.result_path, protocol_name),
         )
 
 
@@ -215,7 +223,10 @@ def single_run(args):
 
 if __name__ == "__main__":
     args = process_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    # The outer Task 2 scheduler binds each process to a physical GPU. Preserve
+    # that binding; only use --gpu when no binding was supplied by the caller.
+    if "CUDA_VISIBLE_DEVICES" not in os.environ:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
     import ray
     from placedb import PlaceDB

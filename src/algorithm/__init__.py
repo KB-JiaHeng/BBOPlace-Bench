@@ -6,6 +6,10 @@ from .ea.vanilla_ea import VanillaEA
 
 REGISTRY["ea"] = VanillaEA
 
+from .moea.task2_moea import Task2MOEA
+
+REGISTRY["task2_moea"] = Task2MOEA
+
 
 def _register_optional(key, module_name, class_name):
     try:

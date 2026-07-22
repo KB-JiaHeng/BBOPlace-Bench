@@ -1,0 +1,265 @@
+protocol_version: 2
+status: frozen
+frozen_at: "2026-07-23"
+approval: >-
+  The user approved Task 2 on the upstream-native adaptec1 512-macro subset,
+  deferred the full 543-macro instance to Task 3, selected CPU as the formal
+  backend, and allowed automatic formal launch only after all smoke-test gates
+  pass. Any failed or ambiguous gate blocks the formal experiment and requires
+  discussion.
+
+scope:
+  task: 2
+  purpose: >-
+    Extend the frozen Task 1 MGO experiment to a bi-objective macro-placement
+    problem and compare standard NSGA-II with standard MOEA/D using HV.
+  formal_comparison: [nsga2, moead]
+  excludes:
+    - Task 1 crossover-mutation factorial repetition
+    - custom survival or random exploration slots
+    - repair, resampling, or immigration after decoder failure
+    - Lamarckian write-back
+    - phenotype duplicate elimination
+    - algorithm-specific parameter tuning
+    - full-chip standard-cell placement inside the objective loop
+
+inheritance_from_task1:
+  frozen_tag: task1-frozen-v2
+  benchmark: adaptec1
+  benchmark_variant: adaptec1_upstream_native_top512_macro_subset
+  n_macro: 512
+  full_543_macro_instance_deferred_to_task3: true
+  macro_selection:
+    implementation: upstream_read_aux_stable_area_descending_sort
+    tie_break: original_nodes_file_order
+    expected_node_count: 512
+    expected_net_count: 693
+    expected_macro_names_sha256: 6230212160d88bc1c090b12b4a0b892953a683f9713efaf1882257c65a24b026
+    expected_macro_geometry_sha256: 8a38d83d75170b5cc07dc14a4be3e95e53784b7d62ce63eeac67497121097d84
+    expected_net_topology_sha256: 0f54b1517ade1b366ff21da6c7a9deda266148d10814890097a3db79f0c4de85
+    expected_macro_area_sum: 63129768
+    expected_canvas: [459, 459, 11151, 11139]
+  placer: mgo
+  net_scope: bbo_macro_placedb
+  n_grid_x: 224
+  n_grid_y: 224
+  rank_key: area_sum
+  representation: integer_mgo_guides
+  inheritance_mode: baldwinian
+  population_size: 20
+  initial_population_size: 20
+  sampling: random
+  sampling_repeat: 1
+  true_evaluations: 10000
+  seeds: [1, 2, 3, 4, 5]
+  identical_initial_population_within_seed: true
+  initial_population_semantics:
+    same_genotype_set_as_task1: true
+    same_generation_order_between_nsga2_and_moead: true
+    task1_saved_order_not_reused: >-
+      Task 1 saved the complete sampled set after HPWL sorting. Reusing that
+      order would couple MOEA/D weight-vector slots to HPWL. Task 2 therefore
+      preserves the original random generation order and verifies cross-task
+      equality with an order-invariant genotype-set hash.
+  uniform_crossover:
+    overall_probability: 1.0
+    level: scalar
+    exchange_probability: 0.5
+    complementary_children: 2
+  swap_mutation:
+    individual_probability: 1.0
+    swaps_per_child: 1
+    unit: complete_macro_xy_pair
+    distinct_indices: true
+  genotype_duplicate_elimination:
+    enabled: true
+    compare_current_population: true
+    compare_new_offspring: true
+    retry_limit: 100
+  invalid_decode:
+    consumes_evaluation: true
+    repair: false
+    resampling: false
+    objective_value: 1.0e16
+    excluded_from_hv: true
+
+objectives:
+  formal: [hpwl, congestion_top10]
+  auxiliary: [rudy_top10, total_overflow, max_overflow, overflow_fraction]
+  hpwl:
+    evaluator: cpu_comp_res
+    net_scope: bbo_macro_placedb
+  dreamplace_rudy:
+    source: bundled_unmodified_DREAMPlace
+    source_modification_allowed: false
+    dtype: float32
+    deterministic_flag: 1
+    route_num_bins_x: 512
+    route_num_bins_y: 512
+    unit_horizontal_capacity: 1.5625
+    unit_vertical_capacity: 1.45
+    raw_map: horizontal_demand_plus_vertical_demand
+    utilization_map: max_horizontal_vertical_capacity_normalized
+    hotspot_fraction: 0.10
+    hotspot_count_rule: ceil_fraction_times_number_of_bins
+    scalar_rule: arithmetic_mean_of_largest_hotspot_bins
+    wdm_degree_correction: dreamplace_kernel
+    net_weights: benchmark_weight_if_present_else_one
+  naming:
+    rudy_top10: macro_level_dreamplace_routing_demand_proxy
+    congestion_top10: macro_level_dreamplace_default_capacity_utilization_proxy
+
+nsga2:
+  parent_selection: binary_tournament_rank_then_crowding
+  survival: nondominated_sorting_then_crowding_distance
+  crowding: standard_crowding_distance
+  population_size: 20
+  offspring_target_per_generation: 20
+  external_archive_affects_search: false
+
+moead:
+  reference_vectors: 20_uniformly_spaced_biobjective_vectors_including_extremes
+  decomposition: normalized_weighted_tchebycheff
+  neighborhood_size: 10
+  parent_source: neighborhood_only
+  subproblem_order: random_permutation_each_sweep
+  offspring_per_subproblem: 1
+  complementary_child_choice: uniform_random
+  ideal_nadir: dynamic_current_population_plus_offspring
+  replacement: every_improved_neighbor
+  maximum_replacements: unlimited
+  external_archive_affects_search: false
+
+budget_and_randomness:
+  benchmark: adaptec1
+  seeds: [1, 2, 3, 4, 5]
+  true_evaluations_per_run: 10000
+  exact_budget_required: true
+  final_partial_sweep_or_batch_allowed: true
+  paired_initial_populations: true
+  total_formal_runs: 10
+  total_formal_evaluations: 100000
+
+hypervolume:
+  primary_set: final_internal_population
+  secondary_set: offline_cumulative_nondominated_archive
+  invalid_solutions_excluded: true
+  common_postprocessing_across_algorithms_and_seeds: true
+  normalization_source: union_of_all_valid_final_nondominated_sets
+  normalized_reference_point: [1.1, 1.1]
+  sensitivity_reference_points: [[1.05, 1.05], [1.2, 1.2]]
+  per_run_reference_point_forbidden: true
+
+logging:
+  placedb_fingerprint_json: true
+  experiment_definition_fingerprint: true
+  initial_population_npz: true
+  initial_population_sha256: true
+  final_population_npz: true
+  offline_archive_npz: true
+  population_snapshots_at_evaluations: [20, 1000, 5000, 10000]
+  per_evaluation_trace:
+    - evaluation_id
+    - algorithm
+    - phase
+    - generation_or_sweep
+    - subproblem_id
+    - parent1_id
+    - parent2_id
+    - genotype_hash
+    - phenotype_hash
+    - decode_success
+    - hpwl
+    - rudy_top10
+    - congestion_top10
+    - total_overflow
+    - max_overflow
+    - overflow_fraction
+    - overlap_rate
+    - uniform_mask_hex
+    - selected_complementary_child
+    - swap_index_a
+    - swap_index_b
+    - genotype_distance_parent1
+    - genotype_distance_parent2
+    - same_phenotype_parent1
+    - same_phenotype_parent2
+    - moved_macros_parent1
+    - moved_macros_parent2
+    - total_grid_displacement_parent1
+    - total_grid_displacement_parent2
+    - dominance_parent1
+    - dominance_parent2
+    - survived
+    - replacement_count
+    - archive_entered
+    - decode_seconds
+    - metric_seconds
+  generation_metrics: true
+  runtime_metadata: true
+  run_completion_marker: true
+
+smoke_gates:
+  benchmark_instance:
+    explicit_n_macro_equals_512: true
+    actual_node_count_equals_512: true
+    actual_net_count_equals_693: true
+    macro_name_hash_matches_protocol: true
+    macro_geometry_hash_matches_protocol: true
+    net_topology_hash_matches_protocol: true
+    task1_task2_initial_genotype_set_hash_matches: true
+    stale_result_reuse_for_different_definition_forbidden: true
+  source_integrity:
+    dreamplace_source_diff_must_be_empty: true
+    source_checksum_recorded: true
+  build:
+    cpu_rudy_extension_imports: true
+    cuda_rudy_extension_imports_when_cuda_build_enabled: true
+  correctness:
+    hand_calculated_small_net_cases_pass: true
+    top10_aggregation_unit_tests_pass: true
+    zero_width_height_cases_finite: true
+  repeatability:
+    deterministic_repeat_identical_within_backend: true
+    cpu_gpu_relative_tolerance: 1.0e-5
+    cpu_gpu_absolute_tolerance: 1.0e-6
+  metric_information:
+    congestion_nonzero_variance: true
+    at_least_two_valid_nondominated_fixed_layouts: true
+    hpwl_congestion_spearman_abs_less_than: 0.999
+    rudy_congestion_not_exact_positive_scalar_multiple: true
+    overflow_may_be_degenerate_but_is_auxiliary_only: true
+  algorithm_mechanics:
+    paired_initial_hashes_equal: true
+    exact_evaluation_count: true
+    population_size_invariant: true
+    deterministic_replay: true
+    nsga2_rank_crowding_valid: true
+    moead_neighborhood_replacement_valid: true
+  performance:
+    formal_backend: cpu
+    compare_backends: [cpu]
+    cuda_timing_retained_as_nonbinding_smoke_evidence: true
+    compare_cpu_allocations: [1, 2, 4, 8, 12, 20]
+    compare_moead_rudy_cpu_threads: [1, 2, 4, 8]
+    compare_concurrent_runs: [1, 2, 4, 5, 8]
+    selection_rule: maximum_stable_valid_evaluations_per_second
+    same_metric_backend_for_both_algorithms: true
+    no_algorithm_semantics_changed_for_batching: true
+  formal_launch:
+    all_required_gates_must_pass: true
+    ambiguous_result_blocks_launch: true
+
+compute:
+  remote_host: usc-e2
+  project_root: "~/hsea26-hw5-task2"
+  environment_prefix: "~/hsea26-hw5-task2/env"
+  all_caches_and_temporary_files_inside_project_root: true
+  remote_logical_cpus: 256
+  remote_gpus: 8
+  formal_gpu_required: false
+  maximum_concurrent_runs: 8
+  reserve_logical_cpus: 32
+  scheduler_configuration_selected_by_performance_smoke: true
+  cpu_core_binding_required: true
+  gpu_binding_required_when_cuda_selected: true

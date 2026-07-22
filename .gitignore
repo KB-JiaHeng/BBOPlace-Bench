@@ -31,6 +31,9 @@ benchmarks_bk
 sheets_v*
 sock_path
 **.sh
+!script/deploy_task2_remote.sh
+!script/setup_task2_remote_env.sh
+!script/task2_remote_env.sh
 /experiments/task1_runs/
 /experiments/task1_analysis/
 /.task1_tmp/
