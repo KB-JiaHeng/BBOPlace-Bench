@@ -446,6 +446,12 @@ def main() -> None:
         if np.count_nonzero(high_quality_mask) >= 2
         else 0.0
     )
+    raw_lower = np.min(F, axis=0)
+    raw_upper = np.max(F, axis=0)
+    raw_span = raw_upper - raw_lower
+    margin_fraction = float(thresholds["hv_calibration_margin_fraction"])
+    calibration_lower = raw_lower - margin_fraction * raw_span
+    calibration_upper = raw_upper + margin_fraction * raw_span
 
     gates = {
         "minimum_valid_layouts": len(valid_records) >= int(thresholds["minimum_valid_layouts"]),
@@ -499,6 +505,14 @@ def main() -> None:
         "high_quality_layouts": int(np.count_nonzero(high_quality_mask)),
         "high_quality_congestion_relative_range": high_quality_relative_range,
         "nondominated_distinct_phenotype_count": int(len(nondominated)),
+        "hypervolume_calibration": {
+            "source": "stratified_metric_audit_bank_distinct_phenotypes",
+            "margin_fraction": margin_fraction,
+            "raw_lower": raw_lower.tolist(),
+            "raw_upper": raw_upper.tolist(),
+            "lower": calibration_lower.tolist(),
+            "upper": calibration_upper.tolist(),
+        },
         "rudy_congestion_positive_scalar_fit_relative_residual": scalar_residual,
         "grid_resolution": {
             "bins": [256, 512],

@@ -151,7 +151,9 @@ hypervolume:
   secondary_set: offline_cumulative_nondominated_archive
   invalid_solutions_excluded: true
   common_postprocessing_across_algorithms_and_seeds: true
-  normalization_source: union_of_all_valid_final_nondominated_sets
+  normalization_source: stratified_metric_audit_bank_with_fixed_margin
+  calibration_margin_fraction: 0.05
+  formal_results_do_not_define_normalization: true
   normalized_reference_point: [1.1, 1.1]
   sensitivity_reference_points: [[1.05, 1.05], [1.2, 1.2]]
   per_run_reference_point_forbidden: true
@@ -239,6 +241,7 @@ metric_validity:
   maximum_absolute_hpwl_congestion_spearman: 0.999
   minimum_rudy_congestion_scalar_residual: 1.0e-8
   minimum_256_512_grid_spearman: 0.90
+  hv_calibration_margin_fraction: 0.05
   required_diagnostics:
     - phenotype_deduplicated_nondominated_count
     - hpwl_congestion_spearman_and_kendall
