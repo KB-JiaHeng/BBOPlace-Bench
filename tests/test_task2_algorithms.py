@@ -23,6 +23,7 @@ from algorithm.moea.task2_core import (
     sample_integer_population,
     swap_macro_pairs,
     uniform_complementary_children,
+    update_historical_ideal,
 )
 
 
@@ -63,6 +64,14 @@ class Task2CoreTest(unittest.TestCase):
         self.assertEqual(ranks[5], 1)
         self.assertTrue(np.isinf(crowding[0]))
         self.assertTrue(np.isinf(crowding[4]))
+
+    def test_historical_ideal_never_regresses(self):
+        ideal = update_historical_ideal(None, np.array([[4.0, 9.0], [6.0, 7.0]]))
+        np.testing.assert_allclose(ideal, [4.0, 7.0])
+        improved = update_historical_ideal(ideal, np.array([3.0, 8.0]))
+        np.testing.assert_allclose(improved, [3.0, 7.0])
+        regressing_observation = update_historical_ideal(improved, np.array([8.0, 10.0]))
+        np.testing.assert_allclose(regressing_observation, [3.0, 7.0])
 
     def test_moead_vectors_neighbors_and_normalization(self):
         weights = moead_reference_vectors(5)

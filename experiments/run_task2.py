@@ -54,8 +54,8 @@ class RunSpec:
 def load_protocol() -> dict:
     with PROTOCOL_PATH.open() as f:
         protocol = yaml.safe_load(f)
-    if protocol.get("status") != "frozen" or protocol.get("protocol_version") != 2:
-        raise RuntimeError("Task 2 protocol is not frozen at version 2")
+    if protocol.get("status") != "frozen" or protocol.get("protocol_version") != 3:
+        raise RuntimeError("Task 2 protocol is not frozen at version 3")
     return protocol
 
 

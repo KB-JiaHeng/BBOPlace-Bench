@@ -32,11 +32,12 @@ class Task2ProtocolTest(unittest.TestCase):
 
     def test_protocol_is_frozen_and_symmetric_files_exist(self):
         self.assertEqual(self.task2["status"], "frozen")
-        self.assertEqual(self.task2["protocol_version"], 2)
+        self.assertEqual(self.task2["protocol_version"], 3)
         for relative in [
             "experiments/run_task2.py",
             "experiments/analyze_task2.py",
             "experiments/task2_protocol.yaml",
+            "experiments/task2_research_contract.yaml",
             "tests/test_task2_protocol.py",
             "tests/test_task2_metrics.py",
             "tests/test_task2_algorithms.py",
@@ -69,6 +70,25 @@ class Task2ProtocolTest(unittest.TestCase):
             self.task1["crossover"]["types"]["uniform"][
                 "variable_exchange_probability"
             ],
+        )
+
+    def test_validity_remediation_semantics_are_frozen(self):
+        duplicate = self.task2["inheritance_from_task1"][
+            "genotype_duplicate_elimination"
+        ]
+        self.assertEqual(
+            duplicate["semantics"], "run_level_genotype_hash_exclusion"
+        )
+        self.assertTrue(duplicate["compare_entire_evaluated_history"])
+        self.assertFalse(duplicate["phenotype_duplicate_elimination"])
+        moead = self.task2["moead"]
+        self.assertEqual(
+            moead["ideal_point"],
+            "historical_componentwise_minimum_never_regresses",
+        )
+        self.assertEqual(
+            self.task2["research_contract"],
+            "experiments/task2_research_contract.yaml",
         )
 
     def test_formal_problem_and_algorithms_are_fixed(self):

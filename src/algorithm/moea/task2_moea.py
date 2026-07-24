@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
@@ -27,7 +28,6 @@ from ..basic_algo import BasicAlgo
 from .task2_core import (
     binary_tournament_rank_crowding,
     dominance_relation,
-    dynamic_ideal_nadir,
     genotype_hash,
     mask_to_hex,
     moead_neighbors,
@@ -38,6 +38,7 @@ from .task2_core import (
     sample_integer_population,
     swap_macro_pairs,
     uniform_complementary_children,
+    update_historical_ideal,
 )
 
 
@@ -63,6 +64,11 @@ TRACE_COLUMNS = [
     "selected_complementary_child",
     "swap_index_a",
     "swap_index_b",
+    "swap_guide_l1_distance",
+    "swap_macro_area_a",
+    "swap_macro_area_b",
+    "swap_macro_rank_a",
+    "swap_macro_rank_b",
     "genotype_distance_parent1",
     "genotype_distance_parent2",
     "same_phenotype_parent1",
@@ -71,10 +77,24 @@ TRACE_COLUMNS = [
     "moved_macros_parent2",
     "total_grid_displacement_parent1",
     "total_grid_displacement_parent2",
+    "mean_grid_displacement_parent1",
+    "mean_grid_displacement_parent2",
+    "max_grid_displacement_parent1",
+    "max_grid_displacement_parent2",
+    "delta_hpwl_parent1",
+    "delta_hpwl_parent2",
+    "delta_rudy_top10_parent1",
+    "delta_rudy_top10_parent2",
+    "delta_congestion_top10_parent1",
+    "delta_congestion_top10_parent2",
     "dominance_parent1",
     "dominance_parent2",
     "survived",
     "replacement_count",
+    "replacement_slot_ids",
+    "moead_ideal_before",
+    "moead_ideal_after",
+    "moead_nadir",
     "archive_entered",
     "decode_seconds",
     "metric_seconds",
@@ -87,6 +107,8 @@ GENERATION_COLUMNS = [
     "valid_population",
     "unique_genotypes",
     "unique_phenotypes",
+    "max_single_phenotype_fraction",
+    "evaluated_unique_genotypes_cumulative",
     "nondominated_population",
     "min_hpwl",
     "min_congestion_top10",
@@ -142,6 +164,9 @@ class Task2MOEA(BasicAlgo):
         self._validate_config()
         self.method = str(args.task2_method)
         self.node_count = int(placer.placedb.node_cnt)
+        self.macro_rank_by_name = {
+            name: rank for rank, name in enumerate(placer.ranked_macro)
+        }
         self.max_evals = int(args.max_evals)
         self.population_size = int(args.n_population)
         self.offspring_size = int(args.n_offsprings)
@@ -149,6 +174,8 @@ class Task2MOEA(BasicAlgo):
         self.archive: list[Task2Individual] = []
         self.trace_count = 0
         self.decode_failures = 0
+        self.evaluated_genotype_hashes: set[str] = set()
+        self.moead_historical_ideal: np.ndarray | None = None
 
         protocol_path = Path(args.ROOT_DIR) / "experiments" / "task2_protocol.yaml"
         with protocol_path.open() as f:
@@ -184,12 +211,28 @@ class Task2MOEA(BasicAlgo):
 
         self.trace_path = Path(args.result_path) / "evaluation_trace.csv"
         self.generation_path = Path(args.result_path) / "generation_metrics.csv"
+        self.moead_state_path = Path(args.result_path) / "moead_state.csv"
         self.snapshot_dir = Path(args.result_path) / "population_snapshots"
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
         with self.trace_path.open("w", newline="") as f:
             csv.DictWriter(f, fieldnames=TRACE_COLUMNS).writeheader()
         with self.generation_path.open("w", newline="") as f:
             csv.DictWriter(f, fieldnames=GENERATION_COLUMNS).writeheader()
+        if self.method == "moead":
+            with self.moead_state_path.open("w", newline="") as f:
+                csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "evaluation_count",
+                        "sweep",
+                        "ideal",
+                        "nadir",
+                        "slot_evaluation_ids",
+                        "slot_phenotype_hashes",
+                        "unique_slot_phenotypes",
+                        "max_single_phenotype_fraction",
+                    ],
+                ).writeheader()
 
         self.objective = Task2ObjectiveEvaluator(args, placer)
 
@@ -263,6 +306,22 @@ class Task2MOEA(BasicAlgo):
         return "" if value is None else value
 
     @staticmethod
+    def _objective_delta(
+        child: Task2Individual,
+        parent: Task2Individual | None,
+        attribute: str,
+    ) -> Any:
+        if parent is None or not child.valid or not parent.valid:
+            return ""
+        return float(getattr(child.evaluation, attribute) - getattr(parent.evaluation, attribute))
+
+    @staticmethod
+    def _json_vector(value: np.ndarray | None) -> str:
+        if value is None:
+            return ""
+        return json.dumps(np.asarray(value, dtype=float).tolist(), separators=(",", ":"))
+
+    @staticmethod
     def _relation(child: Task2Individual, parent: Task2Individual | None) -> str:
         if parent is None:
             return ""
@@ -283,6 +342,10 @@ class Task2MOEA(BasicAlgo):
         survived: bool,
         replacement_count: int,
         archive_entered: bool,
+        replacement_slots: list[int] | None = None,
+        ideal_before: np.ndarray | None = None,
+        ideal_after: np.ndarray | None = None,
+        nadir: np.ndarray | None = None,
     ) -> None:
         parent1 = variation.parent1 if variation else None
         parent2 = variation.parent2 if variation else None
@@ -294,6 +357,28 @@ class Task2MOEA(BasicAlgo):
             individual.evaluation.macro_grid,
             parent2.evaluation.macro_grid if parent2 else None,
         )
+        swap_metadata: dict[str, Any] = {
+            "distance": "",
+            "area_a": "",
+            "area_b": "",
+            "rank_a": "",
+            "rank_b": "",
+        }
+        if variation is not None:
+            macro_a = self.placer.placedb.macro_lst[variation.swap_a]
+            macro_b = self.placer.placedb.macro_lst[variation.swap_b]
+            x = individual.x
+            n = self.node_count
+            swap_metadata = {
+                "distance": int(
+                    abs(int(x[variation.swap_a]) - int(x[variation.swap_b]))
+                    + abs(int(x[variation.swap_a + n]) - int(x[variation.swap_b + n]))
+                ),
+                "area_a": int(self.placer.placedb.node_info[macro_a]["area"]),
+                "area_b": int(self.placer.placedb.node_info[macro_b]["area"]),
+                "rank_a": int(self.macro_rank_by_name[macro_a]),
+                "rank_b": int(self.macro_rank_by_name[macro_b]),
+            }
         row = {
             "evaluation_id": individual.id,
             "algorithm": self.method,
@@ -318,6 +403,11 @@ class Task2MOEA(BasicAlgo):
             ),
             "swap_index_a": variation.swap_a if variation else "",
             "swap_index_b": variation.swap_b if variation else "",
+            "swap_guide_l1_distance": swap_metadata["distance"],
+            "swap_macro_area_a": swap_metadata["area_a"],
+            "swap_macro_area_b": swap_metadata["area_b"],
+            "swap_macro_rank_a": swap_metadata["rank_a"],
+            "swap_macro_rank_b": swap_metadata["rank_b"],
             "genotype_distance_parent1": (
                 "" if parent1 is None else int(np.count_nonzero(individual.x != parent1.x))
             ),
@@ -338,10 +428,42 @@ class Task2MOEA(BasicAlgo):
             "total_grid_displacement_parent2": self._csv_optional(
                 d2["total_grid_displacement"]
             ),
+            "mean_grid_displacement_parent1": self._csv_optional(
+                d1["mean_grid_displacement"]
+            ),
+            "mean_grid_displacement_parent2": self._csv_optional(
+                d2["mean_grid_displacement"]
+            ),
+            "max_grid_displacement_parent1": self._csv_optional(
+                d1["max_grid_displacement"]
+            ),
+            "max_grid_displacement_parent2": self._csv_optional(
+                d2["max_grid_displacement"]
+            ),
+            "delta_hpwl_parent1": self._objective_delta(individual, parent1, "hpwl"),
+            "delta_hpwl_parent2": self._objective_delta(individual, parent2, "hpwl"),
+            "delta_rudy_top10_parent1": self._objective_delta(
+                individual, parent1, "rudy_top10"
+            ),
+            "delta_rudy_top10_parent2": self._objective_delta(
+                individual, parent2, "rudy_top10"
+            ),
+            "delta_congestion_top10_parent1": self._objective_delta(
+                individual, parent1, "congestion_top10"
+            ),
+            "delta_congestion_top10_parent2": self._objective_delta(
+                individual, parent2, "congestion_top10"
+            ),
             "dominance_parent1": self._relation(individual, parent1),
             "dominance_parent2": self._relation(individual, parent2),
             "survived": int(survived),
             "replacement_count": replacement_count,
+            "replacement_slot_ids": json.dumps(
+                replacement_slots or [], separators=(",", ":")
+            ),
+            "moead_ideal_before": self._json_vector(ideal_before),
+            "moead_ideal_after": self._json_vector(ideal_after),
+            "moead_nadir": self._json_vector(nadir),
             "archive_entered": int(archive_entered),
             "decode_seconds": individual.evaluation.decode_seconds,
             "metric_seconds": individual.evaluation.metric_seconds,
@@ -441,12 +563,17 @@ class Task2MOEA(BasicAlgo):
         else:
             nondominated = 0
             min_hpwl = min_congestion = max_hpwl = max_congestion = float(INF)
-        unique_phenotypes = len(
-            {
-                ind.evaluation.phenotype_hash
-                for ind in valid
-                if ind.evaluation.phenotype_hash is not None
-            }
+        phenotype_hashes = [
+            ind.evaluation.phenotype_hash
+            for ind in valid
+            if ind.evaluation.phenotype_hash is not None
+        ]
+        phenotype_counts = Counter(phenotype_hashes)
+        unique_phenotypes = len(phenotype_counts)
+        max_single_phenotype_fraction = (
+            max(phenotype_counts.values()) / len(valid)
+            if phenotype_counts and valid
+            else 0.0
         )
         elapsed = time.perf_counter() - self.start_time
         row = {
@@ -456,6 +583,8 @@ class Task2MOEA(BasicAlgo):
             "valid_population": len(valid),
             "unique_genotypes": len({ind.evaluation.genotype_hash for ind in population}),
             "unique_phenotypes": unique_phenotypes,
+            "max_single_phenotype_fraction": max_single_phenotype_fraction,
+            "evaluated_unique_genotypes_cumulative": len(self.evaluated_genotype_hashes),
             "nondominated_population": nondominated,
             "min_hpwl": min_hpwl,
             "min_congestion_top10": min_congestion,
@@ -480,8 +609,10 @@ class Task2MOEA(BasicAlgo):
         lower = np.zeros(2 * self.node_count, dtype=np.int64)
         upper = np.full(2 * self.node_count, int(self.args.n_grid_x) - 1, dtype=np.int64)
         X = sample_integer_population(self.population_size, lower, upper)
-        if len({genotype_hash(x) for x in X}) != self.population_size:
+        initial_hashes = {genotype_hash(x) for x in X}
+        if len(initial_hashes) != self.population_size:
             raise RuntimeError("Duplicate genotype occurred in the initial population")
+        self.evaluated_genotype_hashes.update(initial_hashes)
         evaluated = self.objective.evaluate_many(X, parallel_decode=True)
         population = [Task2Individual(evaluation=e) for e in evaluated]
         self.decode_failures += sum(not ind.valid for ind in population)
@@ -528,7 +659,7 @@ class Task2MOEA(BasicAlgo):
                 self.offspring_size,
                 self.max_evals - self.objective.true_n_eval,
             )
-            seen = {ind.evaluation.genotype_hash for ind in population}
+            seen = set(self.evaluated_genotype_hashes)
             candidate_X: list[np.ndarray] = []
             variation_records: list[VariationRecord] = []
             duplicate_rejections = 0
@@ -553,6 +684,7 @@ class Task2MOEA(BasicAlgo):
                         duplicate_rejections += 1
                         continue
                     seen.add(digest)
+                    self.evaluated_genotype_hashes.add(digest)
                     candidate_X.append(child)
                     variation_records.append(
                         VariationRecord(
@@ -622,6 +754,47 @@ class Task2MOEA(BasicAlgo):
             )
         return population
 
+    def _record_moead_state(
+        self,
+        population: list[Task2Individual],
+        sweep: int,
+        ideal: np.ndarray,
+        nadir: np.ndarray,
+    ) -> None:
+        phenotype_hashes = [ind.evaluation.phenotype_hash or "" for ind in population]
+        counts = Counter(value for value in phenotype_hashes if value)
+        with self.moead_state_path.open("a", newline="") as f:
+            csv.DictWriter(
+                f,
+                fieldnames=[
+                    "evaluation_count",
+                    "sweep",
+                    "ideal",
+                    "nadir",
+                    "slot_evaluation_ids",
+                    "slot_phenotype_hashes",
+                    "unique_slot_phenotypes",
+                    "max_single_phenotype_fraction",
+                ],
+            ).writerow(
+                {
+                    "evaluation_count": self.objective.true_n_eval,
+                    "sweep": sweep,
+                    "ideal": self._json_vector(ideal),
+                    "nadir": self._json_vector(nadir),
+                    "slot_evaluation_ids": json.dumps(
+                        [ind.id for ind in population], separators=(",", ":")
+                    ),
+                    "slot_phenotype_hashes": json.dumps(
+                        phenotype_hashes, separators=(",", ":")
+                    ),
+                    "unique_slot_phenotypes": len(counts),
+                    "max_single_phenotype_fraction": (
+                        max(counts.values()) / len(population) if counts else 0.0
+                    ),
+                }
+            )
+
     def _run_moead(self, population: list[Task2Individual]) -> list[Task2Individual]:
         weights = moead_reference_vectors(self.population_size)
         neighbors = moead_neighbors(weights, int(self.args.moead_n_neighbors))
@@ -629,6 +802,16 @@ class Task2MOEA(BasicAlgo):
             Path(self.args.result_path) / "moead_structure.npz",
             reference_vectors=weights,
             neighbors=neighbors,
+        )
+        valid_initial = [ind.f for ind in population if ind.valid]
+        if not valid_initial:
+            raise RuntimeError("MOEA/D cannot initialize without a valid objective vector")
+        self.moead_historical_ideal = update_historical_ideal(
+            None, np.stack(valid_initial)
+        )
+        initial_nadir = np.max(np.stack(valid_initial), axis=0)
+        self._record_moead_state(
+            population, 0, self.moead_historical_ideal, initial_nadir
         )
         sweep = 0
         while self.objective.true_n_eval < self.max_evals:
@@ -641,9 +824,7 @@ class Task2MOEA(BasicAlgo):
                     break
                 variation: VariationRecord | None = None
                 child: np.ndarray | None = None
-                current_hashes = {
-                    ind.evaluation.genotype_hash for ind in population
-                }
+                current_hashes = set(self.evaluated_genotype_hashes)
                 for _ in range(int(self.args.duplicate_retry_limit)):
                     parent_slots = np.random.choice(
                         neighbors[subproblem],
@@ -663,9 +844,12 @@ class Task2MOEA(BasicAlgo):
                         raw_child,
                         self.node_count,
                     )
-                    if genotype_hash(proposed) in current_hashes:
+                    digest = genotype_hash(proposed)
+                    if digest in current_hashes:
                         duplicate_rejections += 1
                         continue
+                    current_hashes.add(digest)
+                    self.evaluated_genotype_hashes.add(digest)
                     child = proposed
                     variation = VariationRecord(
                         parent1=p1,
@@ -687,22 +871,29 @@ class Task2MOEA(BasicAlgo):
                 self.decode_failures += int(not individual.valid)
                 entered = self._archive_add(individual)
                 replacement_slots: list[int] = []
+                valid_current = [ind.f for ind in population if ind.valid]
+                if not valid_current:
+                    raise RuntimeError("MOEA/D population lost all valid objective vectors")
+                ideal_before = np.asarray(self.moead_historical_ideal, dtype=float).copy()
+                ideal_after = ideal_before.copy()
+                nadir = np.max(np.stack(valid_current), axis=0)
 
                 if individual.valid:
-                    valid_current = [ind.f for ind in population if ind.valid]
+                    ideal_after = update_historical_ideal(ideal_before, individual.f)
+                    self.moead_historical_ideal = ideal_after.copy()
                     normalization_values = np.stack(valid_current + [individual.f])
-                    ideal, nadir = dynamic_ideal_nadir(normalization_values)
+                    nadir = np.max(normalization_values, axis=0)
                     slots = neighbors[subproblem]
                     old_values = normalized_tchebycheff(
                         np.stack([population[int(slot)].f for slot in slots]),
                         weights[slots],
-                        ideal,
+                        ideal_after,
                         nadir,
                     )
                     new_values = normalized_tchebycheff(
                         individual.f,
                         weights[slots],
-                        ideal,
+                        ideal_after,
                         nadir,
                     )
                     replacement_slots = [
@@ -729,6 +920,10 @@ class Task2MOEA(BasicAlgo):
                     survived=replacement_count > 0,
                     replacement_count=replacement_count,
                     archive_entered=entered,
+                    replacement_slots=replacement_slots,
+                    ideal_before=ideal_before,
+                    ideal_after=ideal_after,
+                    nadir=nadir,
                 )
                 self._maybe_snapshot(population)
 
@@ -736,6 +931,14 @@ class Task2MOEA(BasicAlgo):
                 raise RuntimeError(
                     "MOEA/D generated no unique offspring during an entire sweep"
                 )
+            valid_current = [ind.f for ind in population if ind.valid]
+            current_nadir = np.max(np.stack(valid_current), axis=0)
+            self._record_moead_state(
+                population,
+                sweep,
+                np.asarray(self.moead_historical_ideal, dtype=float),
+                current_nadir,
+            )
             self._population_metrics(
                 population,
                 sweep,
@@ -792,6 +995,13 @@ class Task2MOEA(BasicAlgo):
             "population_size": len(population),
             "archive_size": len(self.archive),
             "decode_failures": self.decode_failures,
+            "evaluated_unique_genotypes": len(self.evaluated_genotype_hashes),
+            "duplicate_semantics": "run_level_genotype_hash_exclusion",
+            "moead_historical_ideal": (
+                None
+                if self.moead_historical_ideal is None
+                else self.moead_historical_ideal.tolist()
+            ),
             "rudy_backend": self.args.rudy_backend,
             "rudy_cpu_threads": getattr(self.args, "rudy_cpu_threads", None),
             "elapsed_seconds": elapsed,

@@ -163,7 +163,18 @@ class Task2RunnerTest(unittest.TestCase):
         path = base / f"{method}_{seed}_{len(list(base.iterdir()))}"
         path.mkdir()
         args = make_args(path, method, seed)
-        placer = SimpleNamespace(placedb=SimpleNamespace(node_cnt=3))
+        macro_lst = ["m0", "m1", "m2"]
+        placer = SimpleNamespace(
+            placedb=SimpleNamespace(
+                node_cnt=3,
+                macro_lst=macro_lst,
+                node_info={
+                    name: {"area": (index + 1) * 10}
+                    for index, name in enumerate(macro_lst)
+                },
+            ),
+            ranked_macro=list(reversed(macro_lst)),
+        )
         fake_fingerprint = {
             "macro_names_sha256": "unit-macros",
             "net_topology_sha256": "unit-nets",
@@ -187,6 +198,11 @@ class Task2RunnerTest(unittest.TestCase):
         self.assertEqual(completion["true_evaluation_count"], 60)
         self.assertEqual(completion["trace_count"], 60)
         self.assertEqual(completion["population_size"], 20)
+        self.assertEqual(completion["evaluated_unique_genotypes"], 60)
+        self.assertEqual(
+            completion["duplicate_semantics"],
+            "run_level_genotype_hash_exclusion",
+        )
         self.assertEqual(
             completion["definition_fingerprint"],
             "unit-test-definition",
@@ -195,6 +211,18 @@ class Task2RunnerTest(unittest.TestCase):
         with (path / "evaluation_trace.csv").open() as f:
             rows = list(csv.DictReader(f))
         self.assertEqual(len(rows), 60)
+        self.assertEqual(len({row["genotype_hash"] for row in rows}), 60)
+        required_diagnostic_columns = {
+            "mean_grid_displacement_parent1",
+            "max_grid_displacement_parent1",
+            "delta_hpwl_parent1",
+            "delta_congestion_top10_parent1",
+            "swap_guide_l1_distance",
+            "replacement_slot_ids",
+            "moead_ideal_before",
+            "moead_ideal_after",
+        }
+        self.assertTrue(required_diagnostic_columns.issubset(rows[0]))
         final = np.load(path / "final_population.npz")
         self.assertEqual(final["X"].shape, (20, 6))
         self.assertEqual(final["F"].shape, (20, 2))
@@ -225,6 +253,18 @@ class Task2RunnerTest(unittest.TestCase):
                     np.load(first / "final_population.npz")[key],
                     np.load(second / "final_population.npz")[key],
                 )
+
+    def test_moead_records_nonregressing_ideal_and_slot_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.run_method(Path(tmp), "moead", seed=4)
+            with (path / "moead_state.csv").open() as f:
+                rows = list(csv.DictReader(f))
+            self.assertGreaterEqual(len(rows), 2)
+            ideals = np.asarray([json.loads(row["ideal"]) for row in rows])
+            self.assertTrue(np.all(np.diff(ideals, axis=0) <= 0.0))
+            self.assertTrue(
+                all(len(json.loads(row["slot_evaluation_ids"])) == 20 for row in rows)
+            )
 
     def test_moead_replay_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -166,6 +166,26 @@ def dynamic_ideal_nadir(objective_values: np.ndarray) -> tuple[np.ndarray, np.nd
     return np.min(finite, axis=0), np.max(finite, axis=0)
 
 
+def update_historical_ideal(
+    current_ideal: np.ndarray | None,
+    objective_values: np.ndarray,
+) -> np.ndarray:
+    """Update a MOEA/D ideal point without allowing historical regression."""
+    values = np.atleast_2d(np.asarray(objective_values, dtype=float))
+    finite = values[np.all(np.isfinite(values), axis=1)]
+    if len(finite) == 0:
+        if current_ideal is None:
+            raise ValueError("Cannot initialize an ideal point without finite objectives")
+        return np.asarray(current_ideal, dtype=float).copy()
+    observed = np.min(finite, axis=0)
+    if current_ideal is None:
+        return observed.copy()
+    current = np.asarray(current_ideal, dtype=float)
+    if current.shape != observed.shape:
+        raise ValueError("Historical ideal and objective dimensions differ")
+    return np.minimum(current, observed)
+
+
 def normalized_tchebycheff(
     objective_values: np.ndarray,
     weights: np.ndarray,

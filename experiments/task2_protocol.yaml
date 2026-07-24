@@ -1,18 +1,21 @@
-protocol_version: 2
+protocol_version: 3
 status: frozen
-frozen_at: "2026-07-23"
+frozen_at: "2026-07-24"
 approval: >-
   The user approved Task 2 on the upstream-native adaptec1 512-macro subset,
   deferred the full 543-macro instance to Task 3, selected CPU as the formal
-  backend, and allowed automatic formal launch only after all smoke-test gates
-  pass. Any failed or ambiguous gate blocks the formal experiment and requires
-  discussion.
+  backend, and approved the 2026-07-24 validity-remediation plan. Formal launch
+  remains blocked until an artifact-bound automatic smoke decision verifies the
+  exact current experiment definition. Any failed or ambiguous gate blocks the
+  formal experiment and requires discussion.
+research_contract: experiments/task2_research_contract.yaml
 
 scope:
   task: 2
   purpose: >-
-    Extend the frozen Task 1 MGO experiment to a bi-objective macro-placement
-    problem and compare standard NSGA-II with standard MOEA/D using HV.
+    Extend the frozen Task 1 MGO experiment to a controlled bi-objective
+    macro-placement baseline, compare NSGA-II with the explicitly frozen MOEA/D
+    variant, and collect diagnostic evidence needed to select a Task 3 target.
   formal_comparison: [nsga2, moead]
   excludes:
     - Task 1 crossover-mutation factorial repetition
@@ -73,8 +76,11 @@ inheritance_from_task1:
     distinct_indices: true
   genotype_duplicate_elimination:
     enabled: true
+    semantics: run_level_genotype_hash_exclusion
+    compare_entire_evaluated_history: true
     compare_current_population: true
     compare_new_offspring: true
+    phenotype_duplicate_elimination: false
     retry_limit: 100
   invalid_decode:
     consumes_evaluation: true
@@ -125,7 +131,8 @@ moead:
   subproblem_order: random_permutation_each_sweep
   offspring_per_subproblem: 1
   complementary_child_choice: uniform_random
-  ideal_nadir: dynamic_current_population_plus_offspring
+  ideal_point: historical_componentwise_minimum_never_regresses
+  nadir_for_replacement: current_valid_population_plus_offspring_componentwise_maximum
   replacement: every_improved_neighbor
   maximum_replacements: unlimited
   external_archive_affects_search: false
@@ -180,6 +187,11 @@ logging:
     - selected_complementary_child
     - swap_index_a
     - swap_index_b
+    - swap_guide_l1_distance
+    - swap_macro_area_a
+    - swap_macro_area_b
+    - swap_macro_rank_a
+    - swap_macro_rank_b
     - genotype_distance_parent1
     - genotype_distance_parent2
     - same_phenotype_parent1
@@ -188,14 +200,29 @@ logging:
     - moved_macros_parent2
     - total_grid_displacement_parent1
     - total_grid_displacement_parent2
+    - mean_grid_displacement_parent1
+    - mean_grid_displacement_parent2
+    - max_grid_displacement_parent1
+    - max_grid_displacement_parent2
+    - delta_hpwl_parent1
+    - delta_hpwl_parent2
+    - delta_rudy_top10_parent1
+    - delta_rudy_top10_parent2
+    - delta_congestion_top10_parent1
+    - delta_congestion_top10_parent2
     - dominance_parent1
     - dominance_parent2
     - survived
     - replacement_count
+    - replacement_slot_ids
+    - moead_ideal_before
+    - moead_ideal_after
+    - moead_nadir
     - archive_entered
     - decode_seconds
     - metric_seconds
   generation_metrics: true
+  moead_slot_state_per_sweep: true
   runtime_metadata: true
   run_completion_marker: true
 
@@ -233,6 +260,9 @@ smoke_gates:
     paired_initial_hashes_equal: true
     exact_evaluation_count: true
     population_size_invariant: true
+    evaluated_genotype_hashes_unique_within_run: true
+    moead_historical_ideal_never_regresses: true
+    moead_slot_state_recorded_per_sweep: true
     deterministic_replay: true
     nsga2_rank_crowding_valid: true
     moead_neighborhood_replacement_valid: true
