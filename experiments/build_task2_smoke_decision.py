@@ -73,8 +73,14 @@ def validate_test_report(
 
 def validate_metric_audit(
     path: Path,
+    code_fingerprint: str,
+    environment_fingerprint: str,
 ) -> tuple[dict[str, Any], list[Path]]:
     summary = read_json(path)
+    if summary.get("code_fingerprint") != code_fingerprint:
+        raise RuntimeError("metric audit code fingerprint mismatch")
+    if summary.get("environment_fingerprint") != environment_fingerprint:
+        raise RuntimeError("metric audit environment fingerprint mismatch")
     if summary.get("all_required_gates_pass") is not True:
         failed = [key for key, value in summary.get("gates", {}).items() if not value]
         raise RuntimeError(f"metric audit gates failed: {failed}")
@@ -200,7 +206,12 @@ def build_decision(
                 test_report_path, code_fingerprint, environment_fingerprint
             ),
         ),
-        ("metric_audit", lambda: validate_metric_audit(metric_summary_path)),
+        (
+            "metric_audit",
+            lambda: validate_metric_audit(
+                metric_summary_path, code_fingerprint, environment_fingerprint
+            ),
+        ),
         (
             "algorithm_smoke",
             lambda: validate_smoke_summary(

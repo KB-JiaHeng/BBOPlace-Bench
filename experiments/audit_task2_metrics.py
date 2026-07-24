@@ -27,12 +27,14 @@ for path in (ROOT, SRC):
         sys.path.insert(0, str(path))
 
 from algorithm.moea.task2_core import sample_integer_population
+from experiments.run_task2 import experiment_code_fingerprint
 from config.benchmark import benchmark_dict, benchmark_type_dict
 from placedb import PlaceDB
 from placer import REGISTRY as PLACER_REGISTRY
 from task2.benchmark_fingerprint import placedb_fingerprint, validate_expected_fingerprint
 from task2.hashing import genotype_hash
 from task2.metrics import DreamplaceRudyMetric, RudyMetricConfig
+from task2.reproducibility import environment_snapshot
 from utils.compute_res import comp_overlap, comp_res
 from utils.random_parser import set_seed
 
@@ -487,8 +489,12 @@ def main() -> None:
             "max_relative_error_all_scalars": float(np.max(relative_error)),
         }
 
+    environment = environment_snapshot(ROOT)
     summary = {
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "code_fingerprint": experiment_code_fingerprint(),
+        "environment_fingerprint": environment["fingerprint"],
+        "environment": environment,
         "benchmark": "adaptec1",
         "benchmark_variant": protocol["inheritance_from_task1"]["benchmark_variant"],
         "placedb_fingerprint": fingerprint,
