@@ -146,15 +146,16 @@ class Task2SchedulerIsolationTest(unittest.TestCase):
                 )
             ray_root = Path(env["RAY_TMPDIR"])
             self.assertTrue(ray_root.is_relative_to(project))
+            self.assertEqual(ray_root.relative_to(project).as_posix(), "rsc0c1")
+            # Validate the actual documented remote root rather than coupling
+            # the AF_UNIX assertion to pytest's arbitrary TemporaryDirectory.
+            production_ray_root = Path("/home/sihengzhao/hsea26-hw5-task2/rsc0c1")
             representative_socket = (
-                ray_root
+                production_ray_root
                 / "session_2026-07-22_16-02-55_230502_2790057"
                 / "sockets"
                 / "plasma_store"
             )
-            # The real remote root is longer than a temporary test root; the
-            # scheduler uses only <project>/r<slot>, leaving ample suffix room.
-            self.assertEqual(ray_root.relative_to(project).as_posix(), "rsc0c1")
             self.assertLess(len(str(representative_socket)), 107)
 
 
