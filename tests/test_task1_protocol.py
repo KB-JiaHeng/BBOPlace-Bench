@@ -82,7 +82,7 @@ class CountingProblem(Problem):
         out["macro_pos"] = macro_pos
 
 
-class Task1ConfigTest(TestCase):
+class Task1ProtocolTest(TestCase):
     def setUp(self):
         self.args = SimpleNamespace(
             crossover_prob=1.0,
@@ -143,7 +143,7 @@ class Task1ConfigTest(TestCase):
     def test_remote_cpu_limits_are_explicit_and_bounded(self):
         with (ROOT / "config" / "default.yaml").open() as f:
             default = yaml.safe_load(f)
-        with (ROOT / "experiments" / "task1_config.yaml").open() as f:
+        with (ROOT / "experiments" / "task1_protocol.yaml").open() as f:
             protocol = yaml.safe_load(f)
 
         self.assertEqual(default["n_cpu_max"], 12)

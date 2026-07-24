@@ -177,7 +177,7 @@ class Task2MOEA(BasicAlgo):
         self.evaluated_genotype_hashes: set[str] = set()
         self.moead_historical_ideal: np.ndarray | None = None
 
-        protocol_path = Path(args.ROOT_DIR) / "experiments" / "task2_config.yaml"
+        protocol_path = Path(args.ROOT_DIR) / "experiments" / "task2_protocol.yaml"
         with protocol_path.open() as f:
             self.protocol = yaml.safe_load(f)
 

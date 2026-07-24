@@ -32,7 +32,7 @@ def make_args(n_macro: int) -> SimpleNamespace:
 class Task2BenchmarkFingerprintTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with (ROOT / "experiments" / "task2_config.yaml").open() as f:
+        with (ROOT / "experiments" / "task2_protocol.yaml").open() as f:
             cls.protocol = yaml.safe_load(f)
 
     def test_exact_512_macro_subproblem_matches_frozen_fingerprint(self):

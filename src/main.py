@@ -125,16 +125,16 @@ def save_run_metadata(args):
     ) as f:
         json.dump(metadata, f, indent=2)
 
-    experiment_config_name = (
-        "task2_config.yaml"
+    protocol_name = (
+        "task2_protocol.yaml"
         if args.algorithm == "task2_moea"
-        else "task1_config.yaml"
+        else "task1_protocol.yaml"
     )
-    experiment_config_path = os.path.join(ROOT_DIR, "experiments", experiment_config_name)
-    if os.path.exists(experiment_config_path):
+    protocol_path = os.path.join(ROOT_DIR, "experiments", protocol_name)
+    if os.path.exists(protocol_path):
         shutil.copy2(
-            experiment_config_path,
-            os.path.join(args.result_path, experiment_config_name),
+            protocol_path,
+            os.path.join(args.result_path, protocol_name),
         )
 
 

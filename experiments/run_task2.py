@@ -21,12 +21,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-CONFIG_PATH = ROOT / "experiments" / "task2_config.yaml"
+PROTOCOL_PATH = ROOT / "experiments" / "task2_protocol.yaml"
 RUN_STATE_ROOT = ROOT / "experiments" / "task2_runs"
 RESULTS_ROOT = ROOT / "results" / "adaptec1"
 SMOKE_DECISION = ROOT / "experiments" / "task2_smoke" / "smoke_decision.json"
 DEFINITION_FILES = [
-    CONFIG_PATH,
+    PROTOCOL_PATH,
     ROOT / "config" / "default.yaml",
     ROOT / "config" / "placer" / "mgo.yaml",
     ROOT / "config" / "algorithm" / "task2_moea.yaml",
@@ -52,7 +52,7 @@ class RunSpec:
 
 
 def load_protocol() -> dict:
-    with CONFIG_PATH.open() as f:
+    with PROTOCOL_PATH.open() as f:
         protocol = yaml.safe_load(f)
     if protocol.get("status") != "frozen" or protocol.get("protocol_version") != 3:
         raise RuntimeError("Task 2 protocol is not frozen at version 3")
@@ -267,7 +267,7 @@ def validate_completion(
         "placedb_fingerprint.json",
         "resolved_config.yaml",
         "runtime_metadata.json",
-        "task2_config.yaml",
+        "task2_protocol.yaml",
     ]:
         if not (path / filename).exists():
             raise RuntimeError(f"Missing {filename} in {path}")
