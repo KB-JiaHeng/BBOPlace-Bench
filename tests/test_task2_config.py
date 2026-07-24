@@ -22,23 +22,23 @@ def set_hash(X: np.ndarray) -> str:
     return hashlib.sha256(b"".join(rows)).hexdigest()
 
 
-class Task2ProtocolTest(unittest.TestCase):
+class Task2ConfigTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with (ROOT / "experiments" / "task1_protocol.yaml").open() as f:
+        with (ROOT / "experiments" / "task1_config.yaml").open() as f:
             cls.task1 = yaml.safe_load(f)
-        with (ROOT / "experiments" / "task2_protocol.yaml").open() as f:
+        with (ROOT / "experiments" / "task2_config.yaml").open() as f:
             cls.task2 = yaml.safe_load(f)
 
-    def test_protocol_is_frozen_and_symmetric_files_exist(self):
+    def test_config_is_frozen_and_symmetric_files_exist(self):
         self.assertEqual(self.task2["status"], "frozen")
         self.assertEqual(self.task2["protocol_version"], 3)
         for relative in [
             "experiments/run_task2.py",
             "experiments/analyze_task2.py",
-            "experiments/task2_protocol.yaml",
-            "experiments/task2_research_contract.yaml",
-            "tests/test_task2_protocol.py",
+            "experiments/task1_config.yaml",
+            "experiments/task2_config.yaml",
+            "tests/test_task2_config.py",
             "tests/test_task2_metrics.py",
             "tests/test_task2_algorithms.py",
         ]:
@@ -86,10 +86,8 @@ class Task2ProtocolTest(unittest.TestCase):
             moead["ideal_point"],
             "historical_componentwise_minimum_never_regresses",
         )
-        self.assertEqual(
-            self.task2["research_contract"],
-            "experiments/task2_research_contract.yaml",
-        )
+        self.assertIn("research_design", self.task2)
+        self.assertEqual(len(self.task2["research_design"]["research_questions"]), 5)
 
     def test_formal_problem_and_algorithms_are_fixed(self):
         self.assertEqual(

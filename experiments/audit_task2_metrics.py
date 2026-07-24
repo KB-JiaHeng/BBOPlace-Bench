@@ -55,7 +55,7 @@ def load_args() -> SimpleNamespace:
     ]:
         with path.open() as f:
             config.update(yaml.safe_load(f) or {})
-    with (ROOT / "experiments" / "task2_protocol.yaml").open() as f:
+    with (ROOT / "experiments" / "task2_config.yaml").open() as f:
         protocol = yaml.safe_load(f)
     benchmark = "adaptec1"
     benchmark_base = next(base for base, names in benchmark_dict.items() if benchmark in names)
@@ -169,7 +169,7 @@ def main() -> None:
 
     args = load_args()
     placedb = PlaceDB(args=args)
-    with (ROOT / "experiments" / "task2_protocol.yaml").open() as f:
+    with (ROOT / "experiments" / "task2_config.yaml").open() as f:
         protocol = yaml.safe_load(f)
     selection = protocol["inheritance_from_task1"]["macro_selection"]
     expected_fingerprint = {

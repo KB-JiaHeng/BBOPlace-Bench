@@ -21,7 +21,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-PROTOCOL_PATH = ROOT / "experiments" / "task1_protocol.yaml"
+CONFIG_PATH = ROOT / "experiments" / "task1_config.yaml"
 RUN_STATE_ROOT = ROOT / "experiments" / "task1_runs"
 RESULTS_ROOT = ROOT / "results" / "adaptec1"
 
@@ -46,7 +46,7 @@ class Configuration:
 
 
 def load_protocol() -> dict:
-    with PROTOCOL_PATH.open() as f:
+    with CONFIG_PATH.open() as f:
         protocol = yaml.safe_load(f)
     if protocol["status"] != "frozen" or protocol["protocol_version"] != 2:
         raise RuntimeError("Task 1 protocol is not frozen at version 2")
