@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from algorithm.moea.task2_core import genotype_hash, phenotype_hash
+from task2.hashing import genotype_hash, phenotype_hash
 from task2.metrics import DreamplaceRudyMetric, RudyMetricConfig, RudyMetricResult
 from utils.constant import INF
 
@@ -69,25 +69,21 @@ class Task2ObjectiveEvaluator:
         if parallel and len(X) > 1 and int(self.args.n_cpu_max) > 1:
             try:
                 import ray
-                from placer.basic_placer import evaluate_placer
+            except ModuleNotFoundError:
+                # Local development may intentionally omit Ray. This fallback is
+                # allowed only when no Ray runtime can exist.
+                results = [self.placer._evaluate(x) for x in X]
+            else:
+                if not ray.is_initialized():
+                    results = [self.placer._evaluate(x) for x in X]
+                else:
+                    # Once Ray is active, import, submission, worker, and ray.get
+                    # failures are experiment infrastructure failures. They must
+                    # abort the run rather than silently changing the evaluator.
+                    from placer.basic_placer import evaluate_placer
 
-                if ray.is_initialized():
                     futures = [evaluate_placer.remote(self.placer, x) for x in X]
                     results = list(ray.get(futures))
-                else:
-                    results = [self.placer._evaluate(x) for x in X]
-            except Exception:
-                # Never hide an objective failure after remote jobs were launched.
-                # A local fallback is permitted only before a usable Ray runtime
-                # exists; otherwise the exception must surface.
-                try:
-                    import ray
-
-                    if ray.is_initialized():
-                        raise
-                except ModuleNotFoundError:
-                    pass
-                results = [self.placer._evaluate(x) for x in X]
         else:
             results = [self.placer._evaluate(x) for x in X]
         elapsed = time.perf_counter() - start

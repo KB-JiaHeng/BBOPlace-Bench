@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from types import SimpleNamespace
 from typing import Sequence
 
 import numpy as np
+
+from task2.hashing import genotype_hash, phenotype_hash
 from pymoo.algorithms.moo.nsga2 import RankAndCrowding
 from pymoo.core.population import Population
 from pymoo.core.problem import Problem
@@ -28,18 +29,6 @@ def sample_integer_population(
     return np.column_stack(
         [np.random.randint(xl[k], xu[k] + 1, size=n_samples) for k in range(len(xl))]
     ).astype(np.int64, copy=False)
-
-
-def genotype_hash(x: np.ndarray) -> str:
-    x = np.ascontiguousarray(np.asarray(x, dtype=np.int64))
-    return hashlib.sha256(x.tobytes()).hexdigest()
-
-
-def phenotype_hash(grid_xy: np.ndarray | None) -> str | None:
-    if grid_xy is None:
-        return None
-    grid_xy = np.ascontiguousarray(np.asarray(grid_xy, dtype=np.int32))
-    return hashlib.sha256(grid_xy.tobytes()).hexdigest()
 
 
 def uniform_complementary_children(
