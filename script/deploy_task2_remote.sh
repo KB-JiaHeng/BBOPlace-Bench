@@ -61,6 +61,7 @@ rm -f "$REMOTE_ROOT/task2.bundle" "$REMOTE_ROOT/task1-reference-artifacts.tar.gz
 REMOTE
 
 # Benchmarks are ignored data and are copied from the audited local instance.
+ssh "$REMOTE_HOST" "mkdir -p '$REMOTE_ROOT/repo/benchmarks/ispd2005/adaptec1'"
 rsync -az --delete \
   "$LOCAL_ROOT/benchmarks/ispd2005/adaptec1/" \
   "$REMOTE_HOST:$REMOTE_ROOT/repo/benchmarks/ispd2005/adaptec1/"
