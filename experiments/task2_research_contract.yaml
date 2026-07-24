@@ -1,0 +1,142 @@
+contract_version: 1
+status: frozen
+frozen_at: "2026-07-24"
+
+purpose: >-
+  Task 2 is a controlled bi-objective baseline and a diagnostic bridge from
+  Task 1 to Task 3. It compares two explicitly defined multi-objective search
+  procedures while collecting evidence about genotype-phenotype redundancy,
+  variation neutrality, decoder sensitivity, diversity collapse, and the
+  informativeness of the second objective.
+
+formal_problem:
+  benchmark: adaptec1
+  benchmark_variant: adaptec1_upstream_native_top512_macro_subset
+  representation: integer_mgo_guides
+  decoder: frozen_mgo_greedy_decoder
+  population_size: 20
+  evaluations_per_run: 10000
+  seeds: [1, 2, 3, 4, 5]
+  algorithms: [nsga2, moead]
+  variation: uniform_complementary_crossover_plus_one_macro_pair_swap
+  objectives:
+    - name: hpwl
+      interpretation: macro_only_hpwl_on_the_frozen_BBO_PlaceDB
+    - name: congestion_top10
+      interpretation: >-
+        macro-level bundled-DREAMPlace default-capacity utilization proxy,
+        aggregated as the arithmetic mean of the largest ten percent of bins
+
+research_questions:
+  rq1:
+    question: >-
+      Under identical initialization, representation, decoder, variation, and
+      true objective-evaluation budget, how do NSGA-II and the frozen MOEA/D
+      variant differ in Pareto-front approximation quality?
+    primary_evidence:
+      - paired_final_population_hypervolume
+    secondary_evidence:
+      - paired_offline_archive_hypervolume
+      - hypervolume_convergence
+      - nondominated_phenotype_count
+      - objective_extremes
+  rq2:
+    question: >-
+      Do the algorithms exhibit different phenotype diversity, redundancy,
+      or search-collapse behavior?
+    evidence:
+      - unique_phenotypes_over_time
+      - cumulative_phenotype_redundancy
+      - phenotype_multiplicity_within_population
+      - moead_weight_direction_occupancy
+      - maximum_single_phenotype_slot_fraction
+  rq3:
+    question: >-
+      Does congestion_top10 provide a distinguishable and locally useful
+      trade-off signal in the regions visited by Task 1 and Task 2?
+    evidence:
+      - stratified_metric_layout_bank
+      - objective_rank_correlations
+      - high_quality_region_relative_range
+      - nondominated_distinct_phenotype_count
+      - grid_resolution_ranking_stability
+      - high_degree_net_contribution_audit
+  rq4:
+    question: >-
+      How often does the combined Uniform-plus-Swap pipeline change the decoded
+      placement, by how much, and with what objective consequences?
+    evidence:
+      - same_phenotype_parent_rates
+      - moved_macro_count_distributions
+      - mean_and_max_grid_displacement
+      - parent_child_objective_deltas
+      - dominance_and_survival_conditioned_on_displacement
+  rq5:
+    question: >-
+      Does bi-objective search cover useful trade-off regions not represented by
+      the frozen Task 1 Uniform-plus-Swap final populations?
+    evidence:
+      - task1_population_reevaluated_under_task2_objectives
+      - task1_vs_task2_front_coverage
+      - task1_vs_task2_hypervolume_under_common_bounds
+
+allowed_claims:
+  - >-
+    Relative NSGA-II versus frozen-MOEA/D behavior on the exact adaptec1 top-512
+    macro abstraction, under the frozen representation, decoder, variation,
+    initialization, and evaluation budget.
+  - >-
+    Whether the selected macro-level HPWL and utilization-proxy objectives form
+    an observable trade-off within the audited and visited layout regions.
+  - >-
+    Diagnostic conclusions about phenotype redundancy, combined-operator
+    neutrality, decoder-induced displacement, and MOEA/D slot collapse within
+    this experiment.
+  - >-
+    Evidence-based selection of a Task 3 intervention target, without claiming
+    that the intervention is already validated.
+
+forbidden_claims:
+  - algorithm_superiority_for_macro_placement_in_general
+  - generalization_to_other_benchmarks
+  - generalization_to_the_full_543_macro_adaptec1_instance
+  - actual_global_routing_congestion_or_routability
+  - full_chip_standard_cell_placement_quality
+  - independent_causal_effect_of_uniform_crossover
+  - independent_causal_effect_of_swap_mutation
+  - explanation_of_shift_early_stopping_without_a_separate_operator_audit
+  - validity_of_active_variable_reduction_without_a_separate_sensitivity_audit
+
+validity_requirements:
+  construct:
+    - stratified_metric_bank_includes_task1_initial_intermediate_and_final_regions
+    - congestion_has_nontrivial_relative_range_in_high_quality_regions
+    - nondominated_count_is_computed_after_phenotype_deduplication
+    - n7807_contribution_is_reported
+    - one_grid_resolution_sensitivity_check_is_reported
+    - metric_is_named_as_a_proxy_not_as_actual_routing_congestion
+  implementation:
+    - historical_moead_ideal_never_degrades
+    - duplicate_semantics_are_explicit_and_tested
+    - current_definition_end_to_end_smoke_passes
+    - real_bundled_dreamplace_kernel_tests_pass
+    - experiment_and_environment_fingerprints_match_at_formal_launch
+  statistical:
+    - paired_initial_population_within_each_seed
+    - exact_true_evaluation_budget
+    - all_five_paired_differences_are_reported
+    - effect_sizes_and_ranges_are_primary
+    - exact_wilcoxon_is_auxiliary_and_non_significance_is_not_equivalence
+  reporting:
+    - every_conclusion_maps_to_named_artifacts
+    - limitations_include_single_instance_and_macro_only_objectives
+    - historical_smoke_results_are_not_used_as_current_definition_evidence
+
+formal_launch_policy:
+  default: blocked
+  unlock_condition: >-
+    An automatically generated smoke_decision.json binds every required test,
+    metric-audit, algorithm-smoke, source, binary, environment, benchmark, and
+    experiment-definition fingerprint to the exact launch definition, and all
+    mandatory gates pass.
+  manual_boolean_without_artifact_binding_is_forbidden: true
