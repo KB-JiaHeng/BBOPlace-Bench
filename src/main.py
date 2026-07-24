@@ -9,6 +9,7 @@ import shutil
 import socket
 import subprocess
 import traceback
+from pathlib import Path
 
 sys.path.append(os.path.abspath(".."))
 
@@ -22,6 +23,7 @@ from utils.debug import *
 from utils.random_parser import set_seed
 from utils.res2sheet import res2sheet
 from utils.res2sheet_incre import res2sheet_incre
+from task2.reproducibility import environment_snapshot
 
 sys.path.append(ROOT_DIR)
 sys.path.append(THIRDPARTY_DIR)
@@ -100,6 +102,23 @@ def save_run_metadata(args):
     import numpy
     import pymoo
 
+    environment = environment_snapshot(Path(ROOT_DIR))
+    expected_environment = getattr(args, "task2_environment_fingerprint", None)
+    if (
+        args.algorithm == "task2_moea"
+        and expected_environment
+        and environment["fingerprint"] != expected_environment
+    ):
+        raise RuntimeError(
+            "Task 2 environment fingerprint changed between scheduler preflight "
+            f"and run start: {environment['fingerprint']} != {expected_environment}"
+        )
+    with open(
+        os.path.join(args.result_path, "environment_fingerprint.json"),
+        "w",
+    ) as f:
+        json.dump(environment, f, indent=2, sort_keys=True)
+
     metadata = {
         "command": sys.argv,
         "hostname": socket.gethostname(),
@@ -113,6 +132,11 @@ def save_run_metadata(args):
         "n_cpu_max": args.n_cpu_max,
         "gpu_index": args.gpu,
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+        "mkl_num_threads": os.environ.get("MKL_NUM_THREADS"),
+        "openblas_num_threads": os.environ.get("OPENBLAS_NUM_THREADS"),
+        "environment_fingerprint": environment["fingerprint"],
+        "task2_code_fingerprint": getattr(args, "task2_code_fingerprint", None),
         "objective_evaluator": (
             "task2_cpu_hpwl_plus_unmodified_dreamplace_rudy"
             if args.algorithm == "task2_moea"

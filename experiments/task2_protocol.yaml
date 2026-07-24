@@ -302,6 +302,14 @@ smoke_gates:
   formal_launch:
     all_required_gates_must_pass: true
     ambiguous_result_blocks_launch: true
+    decision_builder: experiments/build_task2_smoke_decision.py
+    handwritten_allow_boolean_is_invalid: true
+    required_bound_artifacts:
+      - real_kernel_test_report_and_log
+      - stratified_metric_audit_summary_csv_and_bank
+      - current_definition_2_by_2_by_1000_algorithm_smoke
+      - performance_scheduler_decision
+      - all_smoke_completion_trace_state_and_fingerprint_files
 
 compute:
   remote_host: usc-e2

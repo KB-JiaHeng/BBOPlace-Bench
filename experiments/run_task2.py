@@ -27,17 +27,37 @@ RESULTS_ROOT = ROOT / "results" / "adaptec1"
 SMOKE_DECISION = ROOT / "experiments" / "task2_smoke" / "smoke_decision.json"
 DEFINITION_FILES = [
     PROTOCOL_PATH,
+    ROOT / "pytest.ini",
     ROOT / "config" / "default.yaml",
+    ROOT / "config" / "benchmark.py",
     ROOT / "config" / "placer" / "mgo.yaml",
     ROOT / "config" / "algorithm" / "task2_moea.yaml",
+    ROOT / "src" / "main.py",
+    ROOT / "src" / "placedb.py",
+    ROOT / "src" / "placer" / "__init__.py",
+    ROOT / "src" / "placer" / "basic_placer.py",
+    ROOT / "src" / "placer" / "mgo_placer.py",
     ROOT / "src" / "utils" / "read_benchmark" / "read_aux.py",
     ROOT / "src" / "utils" / "compute_res.py",
-    ROOT / "src" / "placer" / "mgo_placer.py",
+    ROOT / "src" / "utils" / "random_parser.py",
+    ROOT / "src" / "utils" / "constant.py",
     ROOT / "src" / "task2" / "benchmark_fingerprint.py",
+    ROOT / "src" / "task2" / "hashing.py",
     ROOT / "src" / "task2" / "metrics.py",
     ROOT / "src" / "task2" / "evaluator.py",
+    ROOT / "src" / "task2" / "reproducibility.py",
+    ROOT / "src" / "algorithm" / "__init__.py",
     ROOT / "src" / "algorithm" / "moea" / "task2_core.py",
     ROOT / "src" / "algorithm" / "moea" / "task2_moea.py",
+    ROOT / "experiments" / "run_task2.py",
+    ROOT / "experiments" / "run_task2_tests.py",
+    ROOT / "experiments" / "audit_task2_metrics.py",
+    ROOT / "experiments" / "analyze_task2.py",
+    ROOT / "experiments" / "select_task2_scheduler.py",
+    ROOT / "experiments" / "build_task2_smoke_decision.py",
+    ROOT / "script" / "task2_environment_fingerprint.py",
+    ROOT / "script" / "hash_dreamplace_source.py",
+    ROOT / "script" / "task2_remote_env.sh",
 ]
 
 
@@ -63,14 +83,52 @@ def parse_csv(value: str, converter=str) -> list:
     return [converter(item.strip()) for item in value.split(",") if item.strip()]
 
 
+def sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def experiment_code_fingerprint() -> str:
+    payload = {
+        str(path.relative_to(ROOT)): sha256_path(path)
+        for path in sorted(DEFINITION_FILES)
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def environment_snapshot_for_python(python: str) -> dict:
+    result = subprocess.run(
+        [python, str(ROOT / "script" / "task2_environment_fingerprint.py")],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return json.loads(result.stdout)
+
+
+def verify_bound_artifacts(decision: dict) -> None:
+    artifacts = decision.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise RuntimeError("Smoke decision has no bound artifacts")
+    for artifact in artifacts:
+        path = Path(artifact["path"])
+        if not path.is_absolute():
+            path = ROOT / path
+        if not path.is_file():
+            raise RuntimeError(f"Bound smoke artifact is missing: {path}")
+        actual = sha256_path(path)
+        if actual != artifact.get("sha256"):
+            raise RuntimeError(
+                f"Bound smoke artifact changed: {path}: {actual} != {artifact.get('sha256')}"
+            )
+
+
 def experiment_definition_fingerprint(command: list[str]) -> str:
-    """Hash the semantic command and all files that define Task 2 behavior."""
+    """Hash one run's semantic command and the shared Task 2 code definition."""
     payload = {
         "command_without_python": command[1:],
-        "definition_files": {
-            str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in DEFINITION_FILES
-        },
+        "code_fingerprint": experiment_code_fingerprint(),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -116,7 +174,10 @@ def require_idle_gpus(gpu_indices: list[int], *, maximum_idle_memory_mib: int = 
     return {index: usage[index] for index in gpu_indices}
 
 
-def load_formal_recommendation() -> dict:
+def load_formal_recommendation(
+    current_code_fingerprint: str,
+    current_environment_fingerprint: str,
+) -> dict:
     if not SMOKE_DECISION.exists():
         raise RuntimeError(
             "Formal launch is blocked: task2_smoke/smoke_decision.json is absent"
@@ -127,6 +188,13 @@ def load_formal_recommendation() -> dict:
             "Formal launch is blocked by smoke decision: "
             + json.dumps(decision, indent=2)
         )
+    if decision.get("code_fingerprint") != current_code_fingerprint:
+        raise RuntimeError("Formal launch is blocked: code fingerprint changed after smoke")
+    if decision.get("environment_fingerprint") != current_environment_fingerprint:
+        raise RuntimeError(
+            "Formal launch is blocked: environment fingerprint changed after smoke"
+        )
+    verify_bound_artifacts(decision)
     recommendation = decision.get("recommended_scheduler")
     if not isinstance(recommendation, dict):
         raise RuntimeError("Smoke decision has no recommended_scheduler")
@@ -148,6 +216,8 @@ def command_for(
     cpus_per_run: int,
     rudy_backend: str,
     rudy_cpu_threads: int,
+    code_fingerprint: str | None = None,
+    environment_fingerprint: str | None = None,
 ) -> list[str]:
     name = run_name(
         mode,
@@ -203,6 +273,10 @@ def command_for(
         "error_redirect": False,
         "n_max_saving_placement": 1,
     }
+    if code_fingerprint is not None:
+        values["task2_code_fingerprint"] = code_fingerprint
+    if environment_fingerprint is not None:
+        values["task2_environment_fingerprint"] = environment_fingerprint
 
     def encode(value: object) -> str:
         if isinstance(value, bool):
@@ -234,6 +308,8 @@ def validate_completion(
     expected_evals: int,
     method: str,
     expected_definition_fingerprint: str | None = None,
+    expected_code_fingerprint: str | None = None,
+    expected_environment_fingerprint: str | None = None,
 ) -> dict:
     completion = json.loads((path / "run_complete.json").read_text())
     required = {
@@ -246,6 +322,10 @@ def validate_completion(
     }
     if expected_definition_fingerprint is not None:
         required["definition_fingerprint"] = expected_definition_fingerprint
+    if expected_code_fingerprint is not None:
+        required["code_fingerprint"] = expected_code_fingerprint
+    if expected_environment_fingerprint is not None:
+        required["environment_fingerprint"] = expected_environment_fingerprint
     for key, expected in required.items():
         if completion.get(key) != expected:
             raise RuntimeError(
@@ -267,10 +347,13 @@ def validate_completion(
         "placedb_fingerprint.json",
         "resolved_config.yaml",
         "runtime_metadata.json",
+        "environment_fingerprint.json",
         "task2_protocol.yaml",
     ]:
         if not (path / filename).exists():
             raise RuntimeError(f"Missing {filename} in {path}")
+    if method == "moead" and not (path / "moead_state.csv").exists():
+        raise RuntimeError(f"Missing moead_state.csv in {path}")
     return completion
 
 
@@ -279,6 +362,8 @@ def existing_completed_result(
     expected_evals: int,
     method: str,
     expected_definition_fingerprint: str,
+    expected_code_fingerprint: str,
+    expected_environment_fingerprint: str,
 ) -> Path | None:
     if not manifest_path.exists():
         return None
@@ -292,6 +377,8 @@ def existing_completed_result(
             expected_evals,
             method,
             expected_definition_fingerprint,
+            expected_code_fingerprint,
+            expected_environment_fingerprint,
         )
         return path
     except Exception:
@@ -390,6 +477,8 @@ def run_one(
     cores: list[int],
     gpu: int | None,
     mode_dir: Path,
+    code_fingerprint: str,
+    environment_fingerprint: str,
 ) -> Path:
     key = spec.key
     manifest_label = (
@@ -406,6 +495,8 @@ def run_one(
         cpus_per_run=cpus_per_run,
         rudy_backend=backend,
         rudy_cpu_threads=rudy_threads,
+        code_fingerprint=code_fingerprint,
+        environment_fingerprint=environment_fingerprint,
     )
     definition_fingerprint = experiment_definition_fingerprint(command)
     command.append(f"--task2_definition_fingerprint={definition_fingerprint}")
@@ -414,6 +505,8 @@ def run_one(
         max_evals,
         spec.method,
         definition_fingerprint,
+        code_fingerprint,
+        environment_fingerprint,
     )
     if completed is not None:
         print(f"[skip] {key} -> {completed}", flush=True)
@@ -433,6 +526,8 @@ def run_one(
         "spec": asdict(spec),
         "command": launch,
         "definition_fingerprint": definition_fingerprint,
+        "code_fingerprint": code_fingerprint,
+        "environment_fingerprint": environment_fingerprint,
         "started_at_unix": started,
         "slot": slot,
         "cores": cores,
@@ -469,6 +564,8 @@ def run_one(
         max_evals,
         spec.method,
         definition_fingerprint,
+        code_fingerprint,
+        environment_fingerprint,
     )
     manifest.update(
         {
@@ -525,9 +622,15 @@ def main() -> None:
     parser.add_argument("--nice-level", type=int, default=10)
     args = parser.parse_args()
     protocol = load_protocol()
+    code_fingerprint = experiment_code_fingerprint()
+    environment = environment_snapshot_for_python(args.python)
+    environment_fingerprint = str(environment["fingerprint"])
 
     if args.mode == "formal":
-        recommendation = load_formal_recommendation()
+        recommendation = load_formal_recommendation(
+            code_fingerprint,
+            environment_fingerprint,
+        )
         backend = recommendation["backend"]
         cpus_per_run = int(recommendation["cpus_per_run"])
         rudy_threads = int(recommendation["rudy_cpu_threads"])
@@ -599,6 +702,8 @@ def main() -> None:
                 cores=core_sets[slot],
                 gpu=gpu,
                 mode_dir=mode_dir,
+                code_fingerprint=code_fingerprint,
+                environment_fingerprint=environment_fingerprint,
             )
         finally:
             slots.put(slot)
@@ -620,6 +725,9 @@ def main() -> None:
         "gpu_indices": gpu_indices,
         "formal_gpu_preflight": formal_gpu_preflight,
         "max_evals": max_evals,
+        "code_fingerprint": code_fingerprint,
+        "environment_fingerprint": environment_fingerprint,
+        "environment_snapshot": environment,
         "results": [str(path) for path in sorted(results)],
         "paired_initial_population": paired,
         "completed_at_unix": time.time(),

@@ -983,6 +983,16 @@ class Task2MOEA(BasicAlgo):
             "definition_fingerprint": str(
                 getattr(self.args, "task2_definition_fingerprint", "direct-test")
             ),
+            "code_fingerprint": str(
+                getattr(self.args, "task2_code_fingerprint", "direct-test-code")
+            ),
+            "environment_fingerprint": str(
+                getattr(
+                    self.args,
+                    "task2_environment_fingerprint",
+                    "direct-test-environment",
+                )
+            ),
             "placedb_macro_names_sha256": self.benchmark_fingerprint[
                 "macro_names_sha256"
             ],

@@ -109,6 +109,8 @@ def make_args(result_path: Path, method: str, seed: int = 1):
         task2_method=method,
         task2_smoke_test=True,
         task2_definition_fingerprint="unit-test-definition",
+        task2_code_fingerprint="unit-test-code",
+        task2_environment_fingerprint="unit-test-environment",
         seed=seed,
         n_cpu_max=1,
     )
@@ -207,6 +209,10 @@ class Task2RunnerTest(unittest.TestCase):
         self.assertEqual(
             completion["definition_fingerprint"],
             "unit-test-definition",
+        )
+        self.assertEqual(completion["code_fingerprint"], "unit-test-code")
+        self.assertEqual(
+            completion["environment_fingerprint"], "unit-test-environment"
         )
         self.assertTrue((path / "placedb_fingerprint.json").exists())
         with (path / "evaluation_trace.csv").open() as f:
