@@ -32,7 +32,7 @@ class Task2ProtocolTest(unittest.TestCase):
 
     def test_protocol_is_frozen_and_symmetric_files_exist(self):
         self.assertEqual(self.task2["status"], "frozen")
-        self.assertEqual(self.task2["protocol_version"], 3)
+        self.assertEqual(self.task2["protocol_version"], 4)
         for relative in [
             "experiments/run_task2.py",
             "experiments/analyze_task2.py",
@@ -88,6 +88,34 @@ class Task2ProtocolTest(unittest.TestCase):
         )
         self.assertIn("research_design", self.task2)
         self.assertEqual(len(self.task2["research_design"]["research_questions"]), 5)
+
+    def test_corrected_contract_matches_available_task1_evidence(self):
+        semantics = self.task2["inheritance_from_task1"]["initial_population_semantics"]
+        self.assertEqual(semantics["available_historical_task1_reference_seeds"], [1])
+        self.assertTrue(semantics["task1_seeds_2_to_5_not_claimed_as_historically_verified"])
+
+        reference = self.task2["metric_validity"]["task1_reference_scope"]
+        self.assertEqual(reference["available_initial_seeds"], [1])
+        self.assertEqual(reference["saved_best_scope"], "mixed_available_task1_runs")
+        self.assertFalse(reference["intermediate_populations_available"])
+        self.assertFalse(reference["full_final_populations_available"])
+
+        rq5 = self.task2["research_design"]["research_questions"]["rq5"]
+        self.assertIn("mixed Task 1 saved-best", rq5["question"])
+        self.assertNotIn("Uniform-plus-Swap final populations", rq5["question"])
+        self.assertIn("not a Uniform-plus-Swap final population", rq5["limitation"])
+
+    def test_performance_matrix_is_exactly_the_executed_small_matrix(self):
+        performance = self.task2["smoke_gates"]["performance"]
+        self.assertEqual(performance["evaluations_per_candidate"], 100)
+        self.assertEqual(
+            performance["candidate_matrix"],
+            [
+                {"cpus_per_run": 4, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+                {"cpus_per_run": 12, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+                {"cpus_per_run": 20, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+            ],
+        )
 
     def test_formal_problem_and_algorithms_are_fixed(self):
         self.assertEqual(

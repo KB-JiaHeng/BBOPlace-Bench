@@ -1,11 +1,12 @@
-protocol_version: 3
+protocol_version: 4
 status: frozen
 frozen_at: "2026-07-24"
 approval: >-
   The user approved Task 2 on the upstream-native adaptec1 512-macro subset,
   deferred the full 543-macro instance to Task 3, selected CPU as the formal
-  backend, and approved the 2026-07-24 validity-remediation plan. Formal launch
-  remains blocked until an artifact-bound automatic smoke decision verifies the
+  backend, approved the 2026-07-24 validity-remediation plan, and requested the
+  protocol-v4 evidence-scope corrections after an independent audit. Formal
+  launch remains blocked until an artifact-bound automatic smoke decision verifies the
   exact current experiment definition. Any failed or ambiguous gate blocks the
   formal experiment and requires discussion.
 
@@ -56,13 +57,16 @@ inheritance_from_task1:
   seeds: [1, 2, 3, 4, 5]
   identical_initial_population_within_seed: true
   initial_population_semantics:
-    same_genotype_set_as_task1: true
     same_generation_order_between_nsga2_and_moead: true
+    available_historical_task1_reference_seeds: [1]
+    available_task1_seed1_genotype_set_must_match: true
+    task1_seeds_2_to_5_not_claimed_as_historically_verified: true
     task1_saved_order_not_reused: >-
-      Task 1 saved the complete sampled set after HPWL sorting. Reusing that
-      order would couple MOEA/D weight-vector slots to HPWL. Task 2 therefore
-      preserves the original random generation order and verifies cross-task
-      equality with an order-invariant genotype-set hash.
+      The available Task 1 seed-1 artifact saved the complete sampled set after
+      HPWL sorting. Task 2 preserves the original random generation order and
+      verifies equality to that available historical set with an order-invariant
+      hash. Seeds 2-5 remain paired between NSGA-II and MOEA/D, but are not
+      claimed to have historical Task 1 artifacts.
   uniform_crossover:
     overall_probability: 1.0
     level: scalar
@@ -229,6 +233,11 @@ logging:
 
 
 metric_validity:
+  task1_reference_scope:
+    available_initial_seeds: [1]
+    saved_best_scope: mixed_available_task1_runs
+    intermediate_populations_available: false
+    full_final_populations_available: false
   minimum_valid_layouts: 40
   minimum_task1_initial_layouts: 20
   minimum_task1_saved_best_layouts: 5
@@ -257,7 +266,7 @@ smoke_gates:
     macro_name_hash_matches_protocol: true
     macro_geometry_hash_matches_protocol: true
     net_topology_hash_matches_protocol: true
-    task1_task2_initial_genotype_set_hash_matches: true
+    available_task1_seed1_initial_genotype_set_hash_matches: true
     stale_result_reuse_for_different_definition_forbidden: true
   source_integrity:
     dreamplace_source_diff_must_be_empty: true
@@ -293,9 +302,11 @@ smoke_gates:
     formal_backend: cpu
     compare_backends: [cpu]
     cuda_timing_retained_as_nonbinding_smoke_evidence: true
-    compare_cpu_allocations: [1, 2, 4, 8, 12, 20]
-    compare_moead_rudy_cpu_threads: [1, 2, 4, 8]
-    compare_concurrent_runs: [1, 2, 4, 5, 8]
+    evaluations_per_candidate: 100
+    candidate_matrix:
+      - {cpus_per_run: 4, rudy_cpu_threads: 1, concurrent_runs: 2}
+      - {cpus_per_run: 12, rudy_cpu_threads: 1, concurrent_runs: 2}
+      - {cpus_per_run: 20, rudy_cpu_threads: 1, concurrent_runs: 2}
     selection_rule: maximum_stable_valid_evaluations_per_second
     same_metric_backend_for_both_algorithms: true
     no_algorithm_semantics_changed_for_batching: true
@@ -352,7 +363,7 @@ research_design:
       - maximum_single_phenotype_slot_fraction
     rq3:
       question: Does congestion_top10 provide a distinguishable and locally useful trade-off signal in
-        the regions visited by Task 1 and Task 2?
+        the available Task 1 initial and mixed saved-best references and the regions visited by Task 2?
       evidence:
       - stratified_metric_layout_bank
       - objective_rank_correlations
@@ -370,12 +381,16 @@ research_design:
       - parent_child_objective_deltas
       - dominance_and_survival_conditioned_on_displacement
     rq5:
-      question: Does bi-objective search cover useful trade-off regions not represented by the frozen
-        Task 1 Uniform-plus-Swap final populations?
+      question: How does the Task 2 front compare with the available mixed Task 1 saved-best placements
+        when both are evaluated under the Task 2 objectives?
       evidence:
-      - task1_population_reevaluated_under_task2_objectives
-      - task1_vs_task2_front_coverage
-      - task1_vs_task2_hypervolume_under_common_bounds
+      - mixed_task1_saved_best_reevaluated_under_task2_objectives
+      - mixed_task1_saved_best_vs_task2_front_coverage
+      - mixed_task1_saved_best_vs_task2_hypervolume_under_common_bounds
+      limitation: >-
+        The reference is a mixture of saved-best placements from available Task 1
+        runs. It is not a Uniform-plus-Swap final population and does not support
+        an operator-specific coverage claim.
   allowed_claims:
   - Relative NSGA-II versus frozen-MOEA/D behavior on the exact adaptec1 top-512 macro abstraction, under
     the frozen representation, decoder, variation, initialization, and evaluation budget.
@@ -395,9 +410,11 @@ research_design:
   - independent_causal_effect_of_swap_mutation
   - explanation_of_shift_early_stopping_without_a_separate_operator_audit
   - validity_of_active_variable_reduction_without_a_separate_sensitivity_audit
+  - coverage_relative_to_task1_uniform_plus_swap_final_populations
   validity_requirements:
     construct:
-    - stratified_metric_bank_includes_task1_initial_intermediate_and_final_regions
+    - metric_bank_includes_available_task1_initial_and_mixed_saved_best_references
+    - unavailable_task1_intermediate_and_full_final_populations_are_not_claimed
     - congestion_has_nontrivial_relative_range_in_high_quality_regions
     - nondominated_count_is_computed_after_phenotype_deduplication
     - n7807_contribution_is_reported
@@ -419,6 +436,7 @@ research_design:
     - every_conclusion_maps_to_named_artifacts
     - limitations_include_single_instance_and_macro_only_objectives
     - historical_smoke_results_are_not_used_as_current_definition_evidence
+    - mixed_task1_saved_best_reference_is_not_described_as_a_uniform_plus_swap_final_population
   formal_launch_policy:
     default: blocked
     unlock_condition: An automatically generated smoke_decision.json binds every required test, metric-audit,

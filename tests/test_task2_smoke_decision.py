@@ -11,7 +11,7 @@ from experiments.build_task2_smoke_decision import (
     validate_test_report,
 )
 from experiments.run_task2 import load_formal_recommendation
-from experiments.select_task2_scheduler import evaluate_candidate
+from experiments.select_task2_scheduler import evaluate_candidate, validate_candidate_coverage
 from task2.reproducibility import sha256_file
 
 
@@ -104,15 +104,30 @@ class Task2SmokeDecisionTest(unittest.TestCase):
                 "backend": "cpu",
                 "code_fingerprint": "code",
                 "environment_fingerprint": "environment",
+                "max_evals": 100,
                 "cpus_per_run": 4,
                 "rudy_cpu_threads": 1,
                 "concurrent_runs": 2,
                 "reserve_cpus": 32,
                 "results": results,
             }))
-            candidate = evaluate_candidate(summary, "code", "environment")
+            candidate = evaluate_candidate(summary, "code", "environment", 100)
         self.assertTrue(candidate["stable"])
         self.assertEqual(candidate["aggregate_valid_evaluations_per_second"], 8.0)
+
+    def test_scheduler_matrix_coverage_rejects_missing_candidate(self):
+        candidates = [
+            {"cpus_per_run": 4, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+            {"cpus_per_run": 12, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+        ]
+        expected = [
+            {"cpus_per_run": 4, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+            {"cpus_per_run": 12, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+            {"cpus_per_run": 20, "rudy_cpu_threads": 1, "concurrent_runs": 2},
+        ]
+        complete, reasons = validate_candidate_coverage(candidates, expected)
+        self.assertFalse(complete)
+        self.assertTrue(reasons)
 
 
 if __name__ == "__main__":

@@ -81,6 +81,19 @@ def validate_metric_audit(
         raise RuntimeError("metric audit code fingerprint mismatch")
     if summary.get("environment_fingerprint") != environment_fingerprint:
         raise RuntimeError("metric audit environment fingerprint mismatch")
+    expected_scope = {
+        "available_initial_seeds": [1],
+        "saved_best_scope": "mixed_available_task1_runs",
+        "intermediate_populations_available": False,
+        "full_final_populations_available": False,
+    }
+    if summary.get("task1_reference_scope") != expected_scope:
+        raise RuntimeError("metric audit Task 1 reference scope mismatch")
+    initial_audit = summary.get("task1_initial_reference_audit", {})
+    if initial_audit.get("matches_generator") is not True:
+        raise RuntimeError("available Task 1 seed-1 initial set was not verified")
+    if len(summary.get("mixed_task1_saved_best_runs", [])) < 2:
+        raise RuntimeError("metric audit does not contain a mixed saved-best reference")
     if summary.get("all_required_gates_pass") is not True:
         failed = [key for key, value in summary.get("gates", {}).items() if not value]
         raise RuntimeError(f"metric audit gates failed: {failed}")
@@ -162,6 +175,10 @@ def validate_performance_decision(
         raise RuntimeError("performance decision did not select a stable scheduler")
     if decision.get("selection_rule") != "maximum_stable_valid_evaluations_per_second":
         raise RuntimeError("performance decision used an unexpected selection rule")
+    if decision.get("candidate_coverage_complete") is not True:
+        raise RuntimeError("performance decision did not cover the frozen candidate matrix")
+    if decision.get("candidate_coverage_failures"):
+        raise RuntimeError("performance decision reports candidate coverage failures")
     if decision.get("code_fingerprint") != code_fingerprint:
         raise RuntimeError("performance decision code fingerprint mismatch")
     if decision.get("environment_fingerprint") != environment_fingerprint:

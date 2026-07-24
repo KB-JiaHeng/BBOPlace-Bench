@@ -93,6 +93,55 @@ def parse_seed(path: Path) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def population_set_sha256(X: np.ndarray) -> str:
+    values = np.ascontiguousarray(np.asarray(X, dtype=np.int64))
+    row_hashes = sorted(hashlib.sha256(row.tobytes()).digest() for row in values)
+    return hashlib.sha256(b"".join(row_hashes)).hexdigest()
+
+
+def audit_available_task1_seed1_initial(
+    task1_results_root: Path,
+    population_size: int,
+    dimension: int,
+    upper_bound: int,
+) -> dict[str, Any]:
+    paths = sorted(
+        task1_results_root.glob(
+            "task1_smoke__main__uniform__swap/mgo/ea/seed_1_*/initial_population.npz"
+        )
+    )
+    if not paths:
+        return {
+            "available_seeds": [],
+            "status": "missing",
+            "matches_generator": False,
+        }
+    reference_hashes = []
+    for path in paths:
+        archive = np.load(path)
+        if "X" not in archive:
+            raise RuntimeError(f"Task 1 initial population has no X array: {path}")
+        reference_hashes.append(population_set_sha256(archive["X"]))
+    if len(set(reference_hashes)) != 1:
+        raise RuntimeError("Available Task 1 seed-1 initial populations disagree")
+    set_seed(1)
+    generated = sample_integer_population(
+        population_size,
+        np.zeros(dimension, dtype=np.int64),
+        np.full(dimension, upper_bound, dtype=np.int64),
+    )
+    generated_hash = population_set_sha256(generated)
+    return {
+        "available_seeds": [1],
+        "status": "verified",
+        "reference_paths": [str(path) for path in paths],
+        "reference_x_set_sha256": reference_hashes[0],
+        "generated_x_set_sha256": generated_hash,
+        "matches_generator": generated_hash == reference_hashes[0],
+        "unavailable_historical_seeds": [2, 3, 4, 5],
+    }
+
+
 def parse_saved_pl(path: Path, placedb: Any) -> dict[str, tuple[float, float]]:
     macro_names = set(placedb.macro_lst)
     macro_pos: dict[str, tuple[float, float]] = {}
@@ -300,6 +349,12 @@ def main() -> None:
     )
 
     placer = PLACER_REGISTRY["mgo"](args=args, placedb=placedb)
+    task1_initial_audit = audit_available_task1_seed1_initial(
+        args_cli.task1_results_root.resolve(),
+        args_cli.population_size,
+        2 * int(placedb.node_cnt),
+        int(args.n_grid_x) - 1,
+    )
     records = collect_layout_bank(
         placer,
         seeds,
@@ -437,6 +492,13 @@ def main() -> None:
     quality_cutoff = float(np.quantile(hpwl, float(thresholds["high_quality_hpwl_quantile"])))
     high_quality_mask = hpwl <= quality_cutoff
     source_counts = Counter(record["source"] for record in valid_records)
+    mixed_saved_best_runs = sorted(
+        {
+            Path(record["source_path"]).parts[-6]
+            for record in valid_records
+            if record["source"] == "task1_saved_best" and record["source_path"]
+        }
+    )
 
     spearman = finite_correlation(spearmanr, hpwl, congestion)
     kendall = finite_correlation(kendalltau, hpwl, congestion)
@@ -458,7 +520,11 @@ def main() -> None:
     gates = {
         "minimum_valid_layouts": len(valid_records) >= int(thresholds["minimum_valid_layouts"]),
         "task1_initial_stratum_present": source_counts["task1_initial"] >= int(thresholds["minimum_task1_initial_layouts"]),
-        "task1_saved_best_stratum_present": source_counts["task1_saved_best"] >= int(thresholds["minimum_task1_saved_best_layouts"]),
+        "available_task1_seed1_initial_matches_generator": bool(task1_initial_audit["matches_generator"]),
+        "mixed_task1_saved_best_reference_present": (
+            source_counts["task1_saved_best"] >= int(thresholds["minimum_task1_saved_best_layouts"])
+            and len(mixed_saved_best_runs) >= 2
+        ),
         "minimum_distinct_phenotypes": len(unique_records) >= int(thresholds["minimum_distinct_phenotypes"]),
         "phenotype_objective_consistency": phenotype_objective_spread <= float(thresholds["phenotype_objective_absolute_tolerance"]),
         "congestion_relative_range": relative_range(congestion) >= float(thresholds["minimum_congestion_relative_range"]),
@@ -498,6 +564,9 @@ def main() -> None:
         "benchmark": "adaptec1",
         "benchmark_variant": protocol["inheritance_from_task1"]["benchmark_variant"],
         "placedb_fingerprint": fingerprint,
+        "task1_reference_scope": thresholds["task1_reference_scope"],
+        "task1_initial_reference_audit": task1_initial_audit,
+        "mixed_task1_saved_best_runs": mixed_saved_best_runs,
         "layout_sources": dict(source_counts),
         "layouts_total": len(records),
         "layouts_valid": len(valid_records),

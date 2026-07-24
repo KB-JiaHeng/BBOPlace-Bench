@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 from datetime import datetime, timezone
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 for path in (ROOT, SRC):
@@ -23,6 +25,7 @@ def evaluate_candidate(
     path: Path,
     expected_code: str,
     expected_environment: str,
+    expected_evaluations: int,
 ) -> dict:
     summary = json.loads(path.read_text())
     reasons: list[str] = []
@@ -34,6 +37,8 @@ def evaluate_candidate(
         reasons.append("code_fingerprint_mismatch")
     if summary.get("environment_fingerprint") != expected_environment:
         reasons.append("environment_fingerprint_mismatch")
+    if int(summary.get("max_evals", -1)) != expected_evaluations:
+        reasons.append("evaluation_budget_mismatch")
     results = [Path(value) for value in summary.get("results", [])]
     methods: set[str] = set()
     throughputs: list[float] = []
@@ -64,6 +69,7 @@ def evaluate_candidate(
         "reasons": reasons,
         "aggregate_valid_evaluations_per_second": score,
         "backend": summary.get("backend"),
+        "max_evals": summary.get("max_evals"),
         "cpus_per_run": summary.get("cpus_per_run"),
         "rudy_cpu_threads": summary.get("rudy_cpu_threads"),
         "concurrent_runs": summary.get("concurrent_runs"),
@@ -71,6 +77,28 @@ def evaluate_candidate(
         "gpu_indices": summary.get("gpu_indices", []),
         "results": [str(value) for value in results],
     }
+
+
+def candidate_key(candidate: dict) -> tuple[int, int, int]:
+    return (
+        int(candidate["cpus_per_run"]),
+        int(candidate["rudy_cpu_threads"]),
+        int(candidate["concurrent_runs"]),
+    )
+
+
+def validate_candidate_coverage(
+    candidates: list[dict],
+    expected_matrix: list[dict],
+) -> tuple[bool, list[str]]:
+    expected = {candidate_key(candidate) for candidate in expected_matrix}
+    actual = {candidate_key(candidate) for candidate in candidates}
+    reasons: list[str] = []
+    if actual != expected:
+        reasons.append(f"candidate_matrix_mismatch:actual={sorted(actual)} expected={sorted(expected)}")
+    if len(candidates) != len(actual):
+        reasons.append("duplicate_candidate_configuration")
+    return not reasons, reasons
 
 
 def main() -> None:
@@ -82,13 +110,27 @@ def main() -> None:
         default=ROOT / "experiments" / "task2_smoke" / "performance_decision.json",
     )
     args = parser.parse_args()
+    with (ROOT / "experiments" / "task2_protocol.yaml").open() as f:
+        protocol = yaml.safe_load(f)
+    performance = protocol["smoke_gates"]["performance"]
+    expected_evaluations = int(performance["evaluations_per_candidate"])
+    expected_matrix = list(performance["candidate_matrix"])
     code = experiment_code_fingerprint()
     environment = environment_snapshot(ROOT)
     candidates = [
-        evaluate_candidate(path.resolve(), code, environment["fingerprint"])
+        evaluate_candidate(
+            path.resolve(), code, environment["fingerprint"], expected_evaluations
+        )
         for path in args.candidates
     ]
-    stable = [candidate for candidate in candidates if candidate["stable"]]
+    coverage_complete, coverage_failures = validate_candidate_coverage(
+        candidates, expected_matrix
+    )
+    stable = (
+        [candidate for candidate in candidates if candidate["stable"]]
+        if coverage_complete
+        else []
+    )
     selected = max(
         stable,
         key=lambda candidate: candidate["aggregate_valid_evaluations_per_second"],
@@ -110,6 +152,10 @@ def main() -> None:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "selected" if recommendation else "blocked",
         "selection_rule": "maximum_stable_valid_evaluations_per_second",
+        "expected_evaluations_per_candidate": expected_evaluations,
+        "expected_candidate_matrix": expected_matrix,
+        "candidate_coverage_complete": coverage_complete,
+        "candidate_coverage_failures": coverage_failures,
         "code_fingerprint": code,
         "environment_fingerprint": environment["fingerprint"],
         "candidates": candidates,

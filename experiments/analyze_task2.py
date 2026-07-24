@@ -261,7 +261,7 @@ def load_fixed_normalization(metric_summary_path: Path) -> tuple[np.ndarray, np.
     return lower, upper, calibration
 
 
-def load_task1_saved_best_reference(metric_csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
+def load_mixed_task1_saved_best_reference(metric_csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
     rows = read_csv(metric_csv_path)
     selected: dict[str, np.ndarray] = {}
     for index, row in enumerate(rows):
@@ -363,7 +363,7 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
 
     lower, upper, calibration = load_fixed_normalization(args.metric_audit_summary)
-    task1_reference_F, task1_reference_hashes = load_task1_saved_best_reference(
+    task1_reference_F, task1_reference_hashes = load_mixed_task1_saved_best_reference(
         args.metric_audit_csv
     )
     paths = load_formal_paths()
@@ -506,7 +506,7 @@ def main() -> None:
     task1_contributions = int(np.count_nonzero(combined_indices < len(task1_front)))
     task2_contributions = int(np.count_nonzero(combined_indices >= len(task1_front)))
     reference_coverage = {
-        "reference_scope": "Task 1 saved best placements across available runs; not full final populations",
+        "reference_scope": "Mixed Task 1 saved-best placements across available runs; not intermediate or full final populations and not an operator-specific reference",
         "task1_distinct_reference_phenotypes": len(task1_reference_F),
         "task1_nondominated_reference_phenotypes": len(task1_front),
         "task1_reference_hv_ref_1.1": hypervolume(
@@ -524,7 +524,7 @@ def main() -> None:
         "combined_front_task1_contributions": task1_contributions,
         "combined_front_task2_contributions": task2_contributions,
     }
-    (args.output / "task1_reference_coverage.json").write_text(
+    (args.output / "mixed_task1_saved_best_coverage.json").write_text(
         json.dumps(reference_coverage, indent=2, sort_keys=True) + "\n"
     )
 
@@ -548,7 +548,7 @@ def main() -> None:
             max(np.count_nonzero(differences > 0), np.count_nonzero(differences < 0))
         ),
         "reference_sensitivity_ordering": {},
-        "task1_reference_coverage": reference_coverage,
+        "mixed_task1_saved_best_coverage": reference_coverage,
     }
     for ref in REFERENCE_POINTS:
         key = f"final_hv_ref_{ref[0]:g}"
@@ -595,7 +595,7 @@ def main() -> None:
             str(args.metric_audit_csv),
         ],
         "rq4_combined_operator_effect": ["run_diagnostics.csv"],
-        "rq5_task1_reference_coverage": ["task1_reference_coverage.json"],
+        "rq5_mixed_task1_saved_best_coverage": ["mixed_task1_saved_best_coverage.json"],
         "limitations": [
             "single reduced adaptec1 top-512 macro instance",
             "macro-only HPWL and utilization proxy",
