@@ -225,6 +225,27 @@ logging:
   runtime_metadata: true
   run_completion_marker: true
 
+
+metric_validity:
+  minimum_valid_layouts: 40
+  minimum_task1_initial_layouts: 20
+  minimum_task1_saved_best_layouts: 5
+  minimum_distinct_phenotypes: 30
+  phenotype_objective_absolute_tolerance: 1.0e-9
+  high_quality_hpwl_quantile: 0.25
+  minimum_high_quality_layouts: 10
+  minimum_congestion_relative_range: 1.0e-4
+  minimum_high_quality_congestion_relative_range: 1.0e-5
+  maximum_absolute_hpwl_congestion_spearman: 0.999
+  minimum_rudy_congestion_scalar_residual: 1.0e-8
+  minimum_256_512_grid_spearman: 0.90
+  required_diagnostics:
+    - phenotype_deduplicated_nondominated_count
+    - hpwl_congestion_spearman_and_kendall
+    - high_quality_region_relative_range
+    - 256_vs_512_grid_ranking
+    - highest_degree_net_leaveout_and_only_net_contribution
+
 smoke_gates:
   benchmark_instance:
     explicit_n_macro_equals_512: true
