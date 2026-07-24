@@ -147,6 +147,112 @@ def distribution_summary(values: np.ndarray) -> dict[str, float | int | None]:
     }
 
 
+def relative_range(values: np.ndarray) -> float | None:
+    values = np.asarray(values, dtype=float)
+    if len(values) == 0:
+        return None
+    denominator = max(abs(float(np.median(values))), 1.0e-30)
+    return float((np.max(values) - np.min(values)) / denominator)
+
+
+def finite_correlation(function: Any, x: np.ndarray, y: np.ndarray) -> float | None:
+    if len(x) < 2 or len(y) < 2:
+        return None
+    value = float(function(x, y).statistic)
+    return value if np.isfinite(value) else None
+
+
+def visited_region_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Summarize objective informativeness over distinct visited phenotypes."""
+    by_phenotype: dict[str, np.ndarray] = {}
+    for index, row in enumerate(rows):
+        if row.get("decode_success") != "1":
+            continue
+        values = np.asarray(
+            [float(row["hpwl"]), float(row["congestion_top10"])], dtype=float
+        )
+        if not valid_mask(values[None, :])[0]:
+            continue
+        digest = row.get("phenotype_hash") or f"unknown-{index}"
+        if digest in by_phenotype:
+            if not np.allclose(by_phenotype[digest], values, rtol=0.0, atol=1.0e-9):
+                raise RuntimeError(
+                    f"Visited phenotype maps to inconsistent objectives: {digest}"
+                )
+            continue
+        by_phenotype[digest] = values
+
+    if not by_phenotype:
+        raise RuntimeError("No valid visited phenotypes")
+    F = np.stack(list(by_phenotype.values()))
+    hpwl = F[:, 0]
+    congestion = F[:, 1]
+    cutoff = float(np.quantile(hpwl, 0.25))
+    high_quality = congestion[hpwl <= cutoff]
+    from scipy.stats import kendalltau, spearmanr
+
+    return {
+        "distinct_visited_phenotypes": len(F),
+        "nondominated_distinct_phenotypes": len(nondominated(F)),
+        "hpwl_congestion_spearman": finite_correlation(spearmanr, hpwl, congestion),
+        "hpwl_congestion_kendall": finite_correlation(kendalltau, hpwl, congestion),
+        "congestion_relative_range": relative_range(congestion),
+        "high_quality_hpwl_cutoff": cutoff,
+        "high_quality_distinct_phenotypes": len(high_quality),
+        "high_quality_congestion_relative_range": relative_range(high_quality),
+    }
+
+
+def displacement_conditioned_diagnostics(
+    rows: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    """Condition parent-child outcomes on a small set of displacement bins."""
+    bins = [("0", 0, 0), ("1-10", 1, 10), ("11-100", 11, 100), (">100", 101, None)]
+    observations: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("phase") != "evolution":
+            continue
+        for parent in (1, 2):
+            moved = row.get(f"moved_macros_parent{parent}", "")
+            if moved in {"", None}:
+                continue
+            observations.append(
+                {
+                    "moved": int(float(moved)),
+                    "survived": int(row["survived"]),
+                    "dominance": row.get(f"dominance_parent{parent}", ""),
+                    "delta_hpwl": float(row[f"delta_hpwl_parent{parent}"]),
+                    "delta_congestion": float(row[f"delta_congestion_top10_parent{parent}"]),
+                }
+            )
+
+    result: list[dict[str, Any]] = []
+    for label, lower, upper in bins:
+        selected = [
+            item
+            for item in observations
+            if item["moved"] >= lower and (upper is None or item["moved"] <= upper)
+        ]
+        if not selected:
+            continue
+        delta_hpwl = np.asarray([item["delta_hpwl"] for item in selected])
+        delta_congestion = np.asarray([item["delta_congestion"] for item in selected])
+        result.append(
+            {
+                "displacement_bin": label,
+                "parent_child_comparisons": len(selected),
+                "survival_rate": float(np.mean([item["survived"] for item in selected])),
+                "dominates_parent_rate": float(np.mean([item["dominance"] == "dominates" for item in selected])),
+                "dominated_by_parent_rate": float(np.mean([item["dominance"] == "dominated" for item in selected])),
+                "hpwl_improvement_rate": float(np.mean(delta_hpwl < 0)),
+                "congestion_improvement_rate": float(np.mean(delta_congestion < 0)),
+                "mean_delta_hpwl": float(np.mean(delta_hpwl)),
+                "mean_delta_congestion_top10": float(np.mean(delta_congestion)),
+            }
+        )
+    return result
+
+
 def trace_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
     valid_rows_trace = [row for row in rows if row.get("decode_success") == "1"]
     evolution = [row for row in rows if row.get("phase") == "evolution"]
@@ -230,6 +336,33 @@ def trace_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
+def moead_slot_occupancy_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        hashes = list(json.loads(row["slot_phenotype_hashes"]))
+        counts = Counter(hashes)
+        probabilities = np.asarray(list(counts.values()), dtype=float) / len(hashes)
+        entropy = float(-np.sum(probabilities * np.log(probabilities)))
+        normalized_entropy = entropy / np.log(len(hashes)) if len(hashes) > 1 else 0.0
+        adjacent_same = (
+            float(np.mean([left == right for left, right in zip(hashes, hashes[1:])]))
+            if len(hashes) > 1
+            else 0.0
+        )
+        result.append(
+            {
+                "evaluation_count": int(row["evaluation_count"]),
+                "sweep": int(row["sweep"]),
+                "slot_count": len(hashes),
+                "unique_slot_phenotypes": len(counts),
+                "largest_phenotype_slot_fraction": float(max(counts.values()) / len(hashes)),
+                "normalized_slot_entropy": normalized_entropy,
+                "adjacent_same_phenotype_fraction": adjacent_same,
+            }
+        )
+    return result
+
+
 def moead_state_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
     if not rows:
         raise RuntimeError("MOEA/D state file is empty")
@@ -239,6 +372,7 @@ def moead_state_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
     concentration = np.asarray(
         [float(row["max_single_phenotype_fraction"]) for row in rows]
     )
+    occupancy = moead_slot_occupancy_rows(rows)
     return {
         "state_rows": len(rows),
         "historical_ideal_nonregressing": nonregressing,
@@ -246,6 +380,14 @@ def moead_state_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
         "final_unique_slot_phenotypes": int(unique[-1]),
         "maximum_single_phenotype_slot_fraction": float(np.max(concentration)),
         "final_single_phenotype_slot_fraction": float(concentration[-1]),
+        "minimum_normalized_slot_entropy": min(row["normalized_slot_entropy"] for row in occupancy),
+        "final_normalized_slot_entropy": occupancy[-1]["normalized_slot_entropy"],
+        "maximum_adjacent_same_phenotype_fraction": max(row["adjacent_same_phenotype_fraction"] for row in occupancy),
+        "final_adjacent_same_phenotype_fraction": occupancy[-1]["adjacent_same_phenotype_fraction"],
+        "first_half_population_collapse_sweep": next(
+            (row["sweep"] for row in occupancy if row["unique_slot_phenotypes"] <= row["slot_count"] / 2),
+            None,
+        ),
         "initial_ideal": ideals[0].tolist(),
         "final_ideal": ideals[-1].tolist(),
     }
@@ -370,8 +512,11 @@ def main() -> None:
     run_data: list[dict[str, Any]] = []
     common_final_fronts: list[np.ndarray] = []
     diagnostic_rows: list[dict[str, Any]] = []
+    visited_region_rows: list[dict[str, Any]] = []
+    displacement_conditioned_rows: list[dict[str, Any]] = []
     diversity_rows: list[dict[str, Any]] = []
     moead_rows: list[dict[str, Any]] = []
+    moead_occupancy_rows: list[dict[str, Any]] = []
 
     for path in paths:
         completion = json.loads((path / "run_complete.json").read_text())
@@ -398,13 +543,25 @@ def main() -> None:
                 **diagnostics,
             }
         )
+        visited_region_rows.append(
+            {"method": method, "seed": seed, **visited_region_diagnostics(trace)}
+        )
+        for conditioned in displacement_conditioned_diagnostics(trace):
+            displacement_conditioned_rows.append(
+                {"method": method, "seed": seed, **conditioned}
+            )
         for row in read_csv(path / "generation_metrics.csv"):
             diversity_rows.append({"method": method, "seed": seed, **row})
         if method == "moead":
-            state = moead_state_diagnostics(read_csv(path / "moead_state.csv"))
+            state_rows = read_csv(path / "moead_state.csv")
+            state = moead_state_diagnostics(state_rows)
             if not state["historical_ideal_nonregressing"]:
                 raise RuntimeError(f"MOEA/D ideal regressed in {path}")
             moead_rows.append({"method": method, "seed": seed, "path": str(path), **state})
+            for occupancy in moead_slot_occupancy_rows(state_rows):
+                moead_occupancy_rows.append(
+                    {"method": method, "seed": seed, **occupancy}
+                )
         run_data.append(
             {
                 "path": path,
@@ -476,8 +633,14 @@ def main() -> None:
     write_rows(args.output / "final_hypervolume.csv", rows)
     write_rows(args.output / "hypervolume_convergence.csv", convergence_rows)
     write_rows(args.output / "run_diagnostics.csv", diagnostic_rows)
+    write_rows(args.output / "visited_region_metric_validity.csv", visited_region_rows)
+    write_rows(
+        args.output / "operator_effect_by_displacement.csv",
+        displacement_conditioned_rows,
+    )
     write_rows(args.output / "phenotype_diversity_over_time.csv", diversity_rows)
     write_rows(args.output / "moead_collapse_diagnostics.csv", moead_rows)
+    write_rows(args.output / "moead_slot_occupancy_over_time.csv", moead_occupancy_rows)
 
     paired: list[dict[str, Any]] = []
     for seed in sorted({row["seed"] for row in rows}):
@@ -589,12 +752,17 @@ def main() -> None:
             "run_diagnostics.csv",
             "phenotype_diversity_over_time.csv",
             "moead_collapse_diagnostics.csv",
+            "moead_slot_occupancy_over_time.csv",
         ],
         "rq3_second_objective_validity": [
             str(args.metric_audit_summary),
             str(args.metric_audit_csv),
+            "visited_region_metric_validity.csv",
         ],
-        "rq4_combined_operator_effect": ["run_diagnostics.csv"],
+        "rq4_combined_operator_effect": [
+            "run_diagnostics.csv",
+            "operator_effect_by_displacement.csv",
+        ],
         "rq5_mixed_task1_saved_best_coverage": ["mixed_task1_saved_best_coverage.json"],
         "limitations": [
             "single reduced adaptec1 top-512 macro instance",
