@@ -57,6 +57,8 @@ DEFINITION_FILES = [
     ROOT / "experiments" / "build_task2_smoke_decision.py",
     ROOT / "script" / "task2_environment_fingerprint.py",
     ROOT / "script" / "hash_dreamplace_source.py",
+    ROOT / "script" / "deploy_task2_remote.sh",
+    ROOT / "script" / "setup_task2_remote_env.sh",
     ROOT / "script" / "task2_remote_env.sh",
 ]
 

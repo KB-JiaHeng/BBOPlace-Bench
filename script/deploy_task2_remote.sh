@@ -1,46 +1,98 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 LOCAL_ROOT="${LOCAL_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REMOTE_HOST="${REMOTE_HOST:-usc-e2}"
-REMOTE_ROOT="${REMOTE_ROOT:-~/hsea26-hw5-task2}"
+REMOTE_ROOT="${REMOTE_ROOT:-/home/sihengzhao/hsea26-hw5-task2}"
+HEAD_SHA=$(git -C "$LOCAL_ROOT" rev-parse HEAD)
 
-ssh "$REMOTE_HOST" "mkdir -p $REMOTE_ROOT/repo $REMOTE_ROOT/{logs,manifests,build,cache,tmp,conda-pkgs,pip-cache,home,dreamplace-install}"
-
-rsync -az --partial --delete --info=stats2,progress2 \
-  --exclude='/.git/' \
-  --exclude='/results/' \
-  --exclude='/assets/' \
-  --exclude='/*.typ' \
-  --include='/benchmarks/' \
-  --include='/benchmarks/ispd2005/' \
-  --include='/benchmarks/ispd2005/adaptec1/***' \
-  --exclude='/benchmarks/***' \
-  --exclude='/.task2_runtime/' \
-  --exclude='/.pytest_cache/' \
-  --exclude='/**/__pycache__/' \
-  --exclude='/**/*.pyc' \
-  --exclude='/experiments/task1_analysis/' \
-  --exclude='/experiments/task1_runs/' \
-  --exclude='/experiments/task1_remote_logs/' \
-  --exclude='/experiments/task2_analysis/' \
-  --exclude='/experiments/task2_runs/*/' \
-  --include='/experiments/task2_smoke/dreamplace_source_manifest.json' \
-  --exclude='/experiments/task2_smoke/***' \
-  --exclude='/**/.git' \
-  --exclude='/**/.git/' \
-  --exclude='/thirdparty/DREAMPlace_source/build/' \
-  --exclude='/thirdparty/DREAMPlace_source/install/' \
-  "$LOCAL_ROOT/" "$REMOTE_HOST:$REMOTE_ROOT/repo/"
-
-ssh "$REMOTE_HOST" "find $REMOTE_ROOT/repo/benchmarks -mindepth 1 -maxdepth 1 ! -name ispd2005 -exec rm -rf {} +; find $REMOTE_ROOT/repo/benchmarks/ispd2005 -mindepth 1 -maxdepth 1 ! -name adaptec1 -exec rm -rf {} +"
-
-LOCAL_MANIFEST_SHA=$(sha256sum "$LOCAL_ROOT/experiments/task2_smoke/dreamplace_source_manifest.json" | awk '{print $1}')
-REMOTE_MANIFEST_SHA=$(ssh "$REMOTE_HOST" "sha256sum $REMOTE_ROOT/repo/experiments/task2_smoke/dreamplace_source_manifest.json" | awk '{print $1}')
-if [[ "$LOCAL_MANIFEST_SHA" != "$REMOTE_MANIFEST_SHA" ]]; then
-  echo "Remote source manifest differs after upload" >&2
+if ! git -C "$LOCAL_ROOT" diff --quiet || ! git -C "$LOCAL_ROOT" diff --cached --quiet; then
+  echo "Tracked local changes must be committed before deployment" >&2
   exit 1
 fi
 
-ssh "$REMOTE_HOST" "python3 $REMOTE_ROOT/repo/script/hash_dreamplace_source.py $REMOTE_ROOT/repo/thirdparty/DREAMPlace_source --verify $REMOTE_ROOT/repo/experiments/task2_smoke/dreamplace_source_manifest.json"
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+BUNDLE="$TMP_DIR/task2.bundle"
+TASK1_REFS="$TMP_DIR/task1-reference-artifacts.tar.gz"
 
-echo "Deployed to $REMOTE_HOST:$REMOTE_ROOT"
+git -C "$LOCAL_ROOT" bundle create "$BUNDLE" HEAD
+(
+  cd "$LOCAL_ROOT"
+  find results/adaptec1 -type f \
+    \( -name initial_population.npz -o -path '*/placements/*.pl' \) \
+    -path 'results/adaptec1/task1_*' -print0 \
+    | tar --null -czf "$TASK1_REFS" --files-from=-
+)
+
+ssh "$REMOTE_HOST" "mkdir -p '$REMOTE_ROOT' '$REMOTE_ROOT/archive'"
+scp -q "$BUNDLE" "$REMOTE_HOST:$REMOTE_ROOT/task2.bundle"
+scp -q "$TASK1_REFS" "$REMOTE_HOST:$REMOTE_ROOT/task1-reference-artifacts.tar.gz"
+
+ssh "$REMOTE_HOST" bash -s -- "$REMOTE_ROOT" "$HEAD_SHA" <<'REMOTE'
+set -euo pipefail
+REMOTE_ROOT=$1
+HEAD_SHA=$2
+NEXT="$REMOTE_ROOT/repo.next"
+CURRENT="$REMOTE_ROOT/repo"
+rm -rf "$NEXT"
+git clone -q "$REMOTE_ROOT/task2.bundle" "$NEXT"
+git -C "$NEXT" checkout -q --detach "$HEAD_SHA"
+
+# Reuse the previously verified ignored DREAMPlace source without retaining the
+# old non-Git code tree. It is verified against the committed source manifest
+# below before the new checkout becomes active.
+if [[ -d "$CURRENT/thirdparty/DREAMPlace_source" ]]; then
+  mkdir -p "$NEXT/thirdparty"
+  cp -a "$CURRENT/thirdparty/DREAMPlace_source" "$NEXT/thirdparty/"
+fi
+
+# Preserve historical results outside the active checkout. They remain useful
+# for audit history but cannot satisfy current fingerprint gates.
+if [[ -d "$CURRENT/results" ]]; then
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  mv "$CURRENT/results" "$REMOTE_ROOT/archive/results-$stamp"
+fi
+rm -rf "$CURRENT"
+mv "$NEXT" "$CURRENT"
+mkdir -p "$CURRENT/results/adaptec1"
+tar -xzf "$REMOTE_ROOT/task1-reference-artifacts.tar.gz" -C "$CURRENT"
+rm -f "$REMOTE_ROOT/task2.bundle" "$REMOTE_ROOT/task1-reference-artifacts.tar.gz"
+REMOTE
+
+# Benchmarks are ignored data and are copied from the audited local instance.
+rsync -az --delete \
+  "$LOCAL_ROOT/benchmarks/ispd2005/adaptec1/" \
+  "$REMOTE_HOST:$REMOTE_ROOT/repo/benchmarks/ispd2005/adaptec1/"
+
+# Fall back to a source upload only if no prior verified source was available.
+if ! ssh "$REMOTE_HOST" "test -d '$REMOTE_ROOT/repo/thirdparty/DREAMPlace_source'"; then
+  rsync -az --delete \
+    --exclude='/.git/' \
+    --exclude='/build/' \
+    --exclude='/install/' \
+    --exclude='/**/__pycache__/' \
+    --exclude='/**/*.pyc' \
+    "$LOCAL_ROOT/thirdparty/DREAMPlace_source/" \
+    "$REMOTE_HOST:$REMOTE_ROOT/repo/thirdparty/DREAMPlace_source/"
+fi
+
+ssh "$REMOTE_HOST" bash -s -- "$REMOTE_ROOT" "$HEAD_SHA" <<'REMOTE'
+set -euo pipefail
+REMOTE_ROOT=$1
+HEAD_SHA=$2
+REPO="$REMOTE_ROOT/repo"
+actual=$(git -C "$REPO" rev-parse HEAD)
+[[ "$actual" == "$HEAD_SHA" ]]
+[[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]]
+python3 "$REPO/script/hash_dreamplace_source.py" \
+  "$REPO/thirdparty/DREAMPlace_source" \
+  --verify "$REPO/experiments/task2_smoke/dreamplace_source_manifest.json"
+printf 'remote_commit=%s\n' "$actual"
+printf 'task1_initial_populations=%s\n' \
+  "$(find "$REPO/results/adaptec1" -path '*/task1_*/*' -name initial_population.npz | wc -l)"
+printf 'task1_saved_placements=%s\n' \
+  "$(find "$REPO/results/adaptec1" -path '*/task1_*/*' -path '*/placements/*.pl' | wc -l)"
+REMOTE
+
+echo "Deployed exact commit $HEAD_SHA to $REMOTE_HOST:$REMOTE_ROOT/repo"
