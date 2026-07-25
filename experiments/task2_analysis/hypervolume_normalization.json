@@ -1,0 +1,36 @@
+{
+  "formal_common_front_size": 23,
+  "formal_results_define_bounds": false,
+  "lower": [
+    543427.7526785716,
+    0.008750001713633538
+  ],
+  "margin_fraction": 0.05,
+  "raw_lower": [
+    580369.0,
+    0.009542316198348999
+  ],
+  "raw_upper": [
+    1319193.9464285683,
+    0.025388605892658234
+  ],
+  "reference_points": [
+    [
+      1.1,
+      1.1
+    ],
+    [
+      1.05,
+      1.05
+    ],
+    [
+      1.2,
+      1.2
+    ]
+  ],
+  "source": "stratified_metric_audit_bank_distinct_phenotypes",
+  "upper": [
+    1356135.1937499968,
+    0.026180920377373695
+  ]
+}

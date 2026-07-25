@@ -1,0 +1,258 @@
+{
+  "all_required_gates_pass": true,
+  "benchmark": "adaptec1",
+  "benchmark_variant": "adaptec1_upstream_native_top512_macro_subset",
+  "code_fingerprint": "bd58e94cc85b7d435fa695663df264f20e314756be7b38910a9088b3a1b2bac5",
+  "congestion_relative_range": 1.2970974751963276,
+  "cpu_gpu": {
+    "reason": "formal backend is CPU; CUDA equivalence is optional diagnostic evidence",
+    "status": "not_requested"
+  },
+  "created_at": "2026-07-24T12:00:48.107984+00:00",
+  "decode_failure_rate": 0.014814814814814815,
+  "decode_failures": 2,
+  "distinct_phenotypes": 133,
+  "environment": {
+    "dreamplace": {
+      "configure": {
+        "available": true,
+        "module": "dreamplace.configure",
+        "path": "/home/sihengzhao/hsea26-hw5-task2/dreamplace-install/dreamplace/configure.py",
+        "sha256": "1e2a783724663148f19afb55f7f9c2a47dae167cf19185eb78b1fd068fceb1f1",
+        "size": 848
+      },
+      "rudy_cpu": {
+        "available": true,
+        "module": "dreamplace.ops.rudy.rudy_cpp",
+        "path": "/home/sihengzhao/hsea26-hw5-task2/dreamplace-install/dreamplace/ops/rudy/rudy_cpp.cpython-310-x86_64-linux-gnu.so",
+        "sha256": "00d8dc4dfb2828b3e12a20206978663a294ba01a40f5f431a57c957fa269bbbf",
+        "size": 130760
+      },
+      "rudy_cuda": {
+        "available": true,
+        "module": "dreamplace.ops.rudy.rudy_cuda",
+        "path": "/home/sihengzhao/hsea26-hw5-task2/dreamplace-install/dreamplace/ops/rudy/rudy_cuda.cpython-310-x86_64-linux-gnu.so",
+        "sha256": "1ee7fd0bb561eb44b2849a881e34c5b0d3b4c693b535b1ac045e76e13bfabe36",
+        "size": 266208
+      },
+      "source_manifest": {
+        "available": true,
+        "file_sha256": "53269371224874b5568d5a5d42a6e4d8740c7697d5a23c29580a9757889a1461",
+        "path": "/home/sihengzhao/hsea26-hw5-task2/repo/experiments/task2_smoke/dreamplace_source_manifest.json",
+        "source_aggregate_sha256": "3cdbc904966acd469b82556e98e28b5aa75348ff9f1fa997a528720efec90ca3",
+        "source_file_count": 13579
+      }
+    },
+    "fingerprint": "af9633bb20f51b0f5ef8ba01208dd7b64598160e9b113d789f67dbe54989e5dd",
+    "git": {
+      "available": true,
+      "branch": "HEAD",
+      "commit": "5bbbd4241fa2e1143a2d2abaea298979f8c04d3e",
+      "status_porcelain": ""
+    },
+    "packages": {
+      "PyYAML": "6.0.2",
+      "numpy": "1.26.4",
+      "pymoo": "0.6.1.1",
+      "ray": "2.9.3",
+      "scipy": "1.11.4",
+      "torch": "2.1.0+cu121"
+    },
+    "platform": {
+      "machine": "x86_64",
+      "release": "5.15.0-131-generic",
+      "system": "Linux"
+    },
+    "python": {
+      "executable": "/home/sihengzhao/hsea26-hw5-task2/env/bin/python3.10",
+      "implementation": "CPython",
+      "version": "3.10.20"
+    },
+    "schema_version": 1,
+    "stable_environment": {
+      "CUDA_HOME": "/usr/local/cuda-12.1"
+    }
+  },
+  "environment_fingerprint": "af9633bb20f51b0f5ef8ba01208dd7b64598160e9b113d789f67dbe54989e5dd",
+  "gates": {
+    "at_least_two_nondominated_distinct_phenotypes": true,
+    "available_task1_seed1_initial_matches_generator": true,
+    "congestion_relative_range": true,
+    "deterministic_repeat_identical_within_backend": true,
+    "grid_resolution_ranking_stable": true,
+    "high_quality_congestion_relative_range": true,
+    "high_quality_region_size": true,
+    "hpwl_congestion_not_nearly_monotonic": true,
+    "minimum_distinct_phenotypes": true,
+    "minimum_valid_layouts": true,
+    "mixed_task1_saved_best_reference_present": true,
+    "phenotype_objective_consistency": true,
+    "rudy_congestion_not_near_scalar_multiple": true,
+    "task1_initial_stratum_present": true
+  },
+  "grid_resolution": {
+    "bins": [
+      256,
+      512
+    ],
+    "ranking_spearman": 0.9994337890226481
+  },
+  "high_degree_net_audit": {
+    "degree": 318,
+    "full_vs_leaveout_ranking_spearman": 0.999326668026933,
+    "maximum_only_net_fraction_of_full_congestion": 0.04879414543124536,
+    "median_only_net_fraction_of_full_congestion": 0.025481781347283496,
+    "net": "n7807"
+  },
+  "high_quality_congestion_relative_range": 0.29070255409519136,
+  "high_quality_hpwl_cutoff": 707870.8928571454,
+  "high_quality_layouts": 34,
+  "hpwl_congestion_kendall": 0.5156695156695157,
+  "hpwl_congestion_spearman": 0.6991379310344826,
+  "hypervolume_calibration": {
+    "lower": [
+      543427.7526785716,
+      0.008750001713633538
+    ],
+    "margin_fraction": 0.05,
+    "raw_lower": [
+      580369.0,
+      0.009542316198348999
+    ],
+    "raw_upper": [
+      1319193.9464285683,
+      0.025388605892658234
+    ],
+    "source": "stratified_metric_audit_bank_distinct_phenotypes",
+    "upper": [
+      1356135.1937499968,
+      0.026180920377373695
+    ]
+  },
+  "layout_sources": {
+    "generated_initial_fallback": 79,
+    "task1_initial": 39,
+    "task1_saved_best": 15
+  },
+  "layouts_total": 135,
+  "layouts_valid": 133,
+  "mixed_task1_saved_best_runs": [
+    "task1_formal__main__sbx__pm",
+    "task1_smoke__main__sbx__pm",
+    "task1_smoke__main__sbx__random_resetting",
+    "task1_smoke__main__sbx__shift",
+    "task1_smoke__main__sbx__shuffle",
+    "task1_smoke__main__sbx__swap",
+    "task1_smoke__main__uniform__pm",
+    "task1_smoke__main__uniform__random_resetting",
+    "task1_smoke__main__uniform__shift",
+    "task1_smoke__main__uniform__swap",
+    "task1_smoke__sensitivity__sbx_eta_15__swap",
+    "task1_smoke__sensitivity__sbx_eta_5__swap",
+    "task1_smoke__sensitivity__uniform__pm_eta_15",
+    "task1_smoke__sensitivity__uniform__pm_eta_5",
+    "task1_v2_smoke"
+  ],
+  "nondominated_distinct_phenotype_count": 2,
+  "overflow": {
+    "maximum_total_overflow": 0.0,
+    "nonzero_layouts": 0
+  },
+  "phenotype_objective_max_absolute_spread": 0.0,
+  "placedb_fingerprint": {
+    "benchmark_file_sha256": {
+      "adaptec1.aux": "f67f5c798e5a58da3a7159ce7c3a2374e6177e9e1a7f799f2cdf5ac81b901b5d",
+      "adaptec1.dp.aux": "e3a73c0e1fe11bb23ccccdc331a248a7cbef8c16f5d8432246603c4cf8cd1928",
+      "adaptec1.eplace-ip.pl": "469d75951218ea654f105055992fc1558d3cbb8a3d7a1eaa90d4886220728da2",
+      "adaptec1.eplace.aux": "c53d9227baec72a6ab99fd8eb95e297f1eaf8f760249572792b72a153929da6a",
+      "adaptec1.lg.pl": "9e5c03e797a7f66533562ebd3c8df75712f49e3ba88ceef84254bafadfd4bc9f",
+      "adaptec1.nets": "6a3f2fc3604571085db9be79c86eedbefaabcf1c1ebaec6acf8f8aa8d2886781",
+      "adaptec1.nodes": "0cf59367a50a8f9da97a2a5ec87cb7b13a52282a73d05cdbd0c404ed2f740c85",
+      "adaptec1.pl": "b389170c484c2a77742b0399999c79c8a8ecf23885c642c3462c1a3478001296",
+      "adaptec1.scl": "fdb44a90d48118c3d264ee212ff09ff70478beda1af32a5f98387ef350548cd0",
+      "adaptec1.wts": "b4a5ef40809a061293bd523948f89e1bba9bfad136e9f7c264f777d8acca851b"
+    },
+    "canvas": [
+      459,
+      459,
+      11151,
+      11139
+    ],
+    "macro_area_sum": 63129768,
+    "macro_geometry_sha256": "8a38d83d75170b5cc07dc14a4be3e95e53784b7d62ce63eeac67497121097d84",
+    "macro_names_sha256": "6230212160d88bc1c090b12b4a0b892953a683f9713efaf1882257c65a24b026",
+    "net_count": 693,
+    "net_topology_sha256": "0f54b1517ade1b366ff21da6c7a9deda266148d10814890097a3db79f0c4de85",
+    "node_count": 512,
+    "schema_version": 2
+  },
+  "repeatability": [
+    {
+      "backend": "cpu",
+      "index": 0,
+      "map_identical": true,
+      "scalar_identical": true,
+      "seed": 1,
+      "source": "task1_initial"
+    },
+    {
+      "backend": "cpu",
+      "index": 14,
+      "map_identical": true,
+      "scalar_identical": true,
+      "seed": 99,
+      "source": "task1_initial"
+    },
+    {
+      "backend": "cpu",
+      "index": 13,
+      "map_identical": true,
+      "scalar_identical": true,
+      "seed": 2,
+      "source": "generated_initial_fallback"
+    },
+    {
+      "backend": "cpu",
+      "index": 6,
+      "map_identical": true,
+      "scalar_identical": true,
+      "seed": 4,
+      "source": "generated_initial_fallback"
+    },
+    {
+      "backend": "cpu",
+      "index": 19,
+      "map_identical": true,
+      "scalar_identical": true,
+      "seed": 5,
+      "source": "generated_initial_fallback"
+    }
+  ],
+  "rudy_congestion_positive_scalar_fit_relative_residual": 0.05237233048461341,
+  "task1_initial_reference_audit": {
+    "available_seeds": [
+      1
+    ],
+    "generated_x_set_sha256": "207910e2adcf430ee2fbff251c6afd0dc0737b6549cbb251049e0c52437805a1",
+    "matches_generator": true,
+    "reference_paths": [
+      "/home/sihengzhao/hsea26-hw5-task2/repo/results/adaptec1/task1_smoke__main__uniform__swap/mgo/ea/seed_1_2026-07-19_22-41-02/initial_population.npz"
+    ],
+    "reference_x_set_sha256": "207910e2adcf430ee2fbff251c6afd0dc0737b6549cbb251049e0c52437805a1",
+    "status": "verified",
+    "unavailable_historical_seeds": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "task1_reference_scope": {
+    "available_initial_seeds": [
+      1
+    ],
+    "full_final_populations_available": false,
+    "intermediate_populations_available": false,
+    "saved_best_scope": "mixed_available_task1_runs"
+  }
+}

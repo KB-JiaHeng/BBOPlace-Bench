@@ -1,0 +1,89 @@
+{
+  "mixed_task1_saved_best_coverage": {
+    "combined_front_task1_contributions": 0,
+    "combined_front_task2_contributions": 23,
+    "reference_scope": "Mixed Task 1 saved-best placements across available runs; not intermediate or full final populations and not an operator-specific reference",
+    "task1_distinct_reference_phenotypes": 15,
+    "task1_front_points_dominated_by_task2": 1,
+    "task1_nondominated_reference_phenotypes": 1,
+    "task1_reference_hv_ref_1.1": 1.1112940383462533,
+    "task2_common_front_hv_ref_1.1": 1.250202231552731,
+    "task2_front_points_dominated_by_task1": 0
+  },
+  "normalization": {
+    "formal_common_front_size": 23,
+    "formal_results_define_bounds": false,
+    "lower": [
+      543427.7526785716,
+      0.008750001713633538
+    ],
+    "margin_fraction": 0.05,
+    "raw_lower": [
+      580369.0,
+      0.009542316198348999
+    ],
+    "raw_upper": [
+      1319193.9464285683,
+      0.025388605892658234
+    ],
+    "reference_points": [
+      [
+        1.1,
+        1.1
+      ],
+      [
+        1.05,
+        1.05
+      ],
+      [
+        1.2,
+        1.2
+      ]
+    ],
+    "source": "stratified_metric_audit_bank_distinct_phenotypes",
+    "upper": [
+      1356135.1937499968,
+      0.026180920377373695
+    ]
+  },
+  "paired_hv_difference_max": 0.053689798510528686,
+  "paired_hv_difference_mean": -0.01118962106517567,
+  "paired_hv_difference_mean_bootstrap_95_ci": [
+    -0.04802770536983623,
+    0.028603173991097065
+  ],
+  "paired_hv_difference_median": -0.03391797694871013,
+  "paired_hv_difference_min": -0.05766640131159617,
+  "paired_hv_difference_std_sample": 0.048856361369285825,
+  "paired_hv_differences": [
+    -0.04544387363863933,
+    -0.05766640131159617,
+    0.053689798510528686,
+    -0.03391797694871013,
+    0.027390348062538594
+  ],
+  "paired_standardized_effect": -0.2290309951778392,
+  "paired_wilcoxon": {
+    "interpretation_guard": "With five pairs, exact two-sided Wilcoxon cannot reach p<0.05 even when all nonzero differences have one sign; p>0.05 is not equivalence.",
+    "pvalue": 0.625,
+    "statistic": 5.0
+  },
+  "reference_sensitivity_ordering": {
+    "(1.05, 1.05)": {
+      "moead_mean": 1.0911005449538704,
+      "nsga2_mean": 1.0804397541109183,
+      "winner_by_mean": "moead"
+    },
+    "(1.1, 1.1)": {
+      "moead_mean": 1.1982589412162352,
+      "nsga2_mean": 1.1870693201510591,
+      "winner_by_mean": "moead"
+    },
+    "(1.2, 1.2)": {
+      "moead_mean": 1.4275757337409636,
+      "nsga2_mean": 1.4153284522313407,
+      "winner_by_mean": "moead"
+    }
+  },
+  "same_direction_pairs": 3
+}

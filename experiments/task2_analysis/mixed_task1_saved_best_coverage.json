@@ -1,0 +1,11 @@
+{
+  "combined_front_task1_contributions": 0,
+  "combined_front_task2_contributions": 23,
+  "reference_scope": "Mixed Task 1 saved-best placements across available runs; not intermediate or full final populations and not an operator-specific reference",
+  "task1_distinct_reference_phenotypes": 15,
+  "task1_front_points_dominated_by_task2": 1,
+  "task1_nondominated_reference_phenotypes": 1,
+  "task1_reference_hv_ref_1.1": 1.1112940383462533,
+  "task2_common_front_hv_ref_1.1": 1.250202231552731,
+  "task2_front_points_dominated_by_task1": 0
+}

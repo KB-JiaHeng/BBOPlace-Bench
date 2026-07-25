@@ -1,0 +1,32 @@
+{
+  "limitations": [
+    "single reduced adaptec1 top-512 macro instance",
+    "macro-only HPWL and utilization proxy",
+    "Task 1 reference contains saved best placements, not complete final populations",
+    "five paired seeds provide effect estimates but weak hypothesis-test resolution"
+  ],
+  "rq1_front_quality": [
+    "final_hypervolume.csv",
+    "paired_hypervolume.csv",
+    "hypervolume_convergence.csv",
+    "summary.json"
+  ],
+  "rq2_diversity_and_collapse": [
+    "run_diagnostics.csv",
+    "phenotype_diversity_over_time.csv",
+    "moead_collapse_diagnostics.csv",
+    "moead_slot_occupancy_over_time.csv"
+  ],
+  "rq3_second_objective_validity": [
+    "/home/sihengzhao/hsea26-hw5-task2/repo/experiments/task2_smoke/metric_audit/metric_audit_summary.json",
+    "/home/sihengzhao/hsea26-hw5-task2/repo/experiments/task2_smoke/metric_audit/fixed_layout_metrics.csv",
+    "visited_region_metric_validity.csv"
+  ],
+  "rq4_combined_operator_effect": [
+    "run_diagnostics.csv",
+    "operator_effect_by_displacement.csv"
+  ],
+  "rq5_mixed_task1_saved_best_coverage": [
+    "mixed_task1_saved_best_coverage.json"
+  ]
+}

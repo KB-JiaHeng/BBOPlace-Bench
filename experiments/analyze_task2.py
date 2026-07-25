@@ -583,6 +583,7 @@ def main() -> None:
     diversity_rows: list[dict[str, Any]] = []
     moead_rows: list[dict[str, Any]] = []
     moead_occupancy_rows: list[dict[str, Any]] = []
+    final_front_point_rows: list[dict[str, Any]] = []
 
     for path in paths:
         completion = json.loads((path / "run_complete.json").read_text())
@@ -595,6 +596,22 @@ def main() -> None:
         if len(final_front) == 0:
             raise RuntimeError(f"Formal final population has no valid front: {path}")
         common_final_fronts.append(final_front)
+        normalized_final_front = normalize(final_front, lower, upper)
+        for index, (point, normalized_point, phenotype_hash) in enumerate(
+            zip(final_front, normalized_final_front, final_front_hashes)
+        ):
+            final_front_point_rows.append(
+                {
+                    "method": completion["method"],
+                    "seed": int(completion["seed"]),
+                    "front_index": index,
+                    "phenotype_hash": str(phenotype_hash),
+                    "hpwl": float(point[0]),
+                    "congestion_top10": float(point[1]),
+                    "normalized_hpwl": float(normalized_point[0]),
+                    "normalized_congestion_top10": float(normalized_point[1]),
+                }
+            )
         trace = read_csv(path / "evaluation_trace.csv")
         diagnostics = trace_diagnostics(trace)
         if diagnostics["repeated_genotype_evaluations"] != 0:
@@ -697,6 +714,7 @@ def main() -> None:
             )
 
     write_rows(args.output / "final_hypervolume.csv", rows)
+    write_rows(args.output / "final_front_points.csv", final_front_point_rows)
     write_rows(args.output / "hypervolume_convergence.csv", convergence_rows)
     write_rows(args.output / "run_diagnostics.csv", diagnostic_rows)
     write_rows(args.output / "visited_region_metric_validity.csv", visited_region_rows)
@@ -726,7 +744,41 @@ def main() -> None:
         )
     write_rows(args.output / "paired_hypervolume.csv", paired)
 
-    task1_front, _ = nondominated_phenotypes(task1_reference_F, task1_reference_hashes)
+    task1_front, task1_front_hashes = nondominated_phenotypes(
+        task1_reference_F, task1_reference_hashes
+    )
+    normalized_task1 = normalize(task1_reference_F, lower, upper)
+    task1_front_hash_set = set(task1_front_hashes.astype(str))
+    task1_reference_rows = [
+        {
+            "phenotype_hash": str(phenotype_hash),
+            "hpwl": float(point[0]),
+            "congestion_top10": float(point[1]),
+            "normalized_hpwl": float(normalized_point[0]),
+            "normalized_congestion_top10": float(normalized_point[1]),
+            "nondominated": str(phenotype_hash) in task1_front_hash_set,
+        }
+        for point, normalized_point, phenotype_hash in zip(
+            task1_reference_F, normalized_task1, task1_reference_hashes
+        )
+    ]
+    write_rows(args.output / "task1_reference_points.csv", task1_reference_rows)
+    common_normalized = normalize(common_front, lower, upper)
+    write_rows(
+        args.output / "common_final_front.csv",
+        [
+            {
+                "front_index": index,
+                "hpwl": float(point[0]),
+                "congestion_top10": float(point[1]),
+                "normalized_hpwl": float(normalized_point[0]),
+                "normalized_congestion_top10": float(normalized_point[1]),
+            }
+            for index, (point, normalized_point) in enumerate(
+                zip(common_front, common_normalized)
+            )
+        ],
+    )
     task2_front = common_front
     combined = np.vstack([task1_front, task2_front])
     combined_indices = np.asarray(
