@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import csv
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -459,9 +460,43 @@ def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
             )
 
 
+def definition_fingerprint_from_manifest(manifest: dict[str, Any]) -> str:
+    """Recompute one run fingerprint from its recorded semantic command."""
+    command = manifest.get("command")
+    code_fingerprint = manifest.get("code_fingerprint")
+    if not isinstance(command, list) or not command:
+        raise RuntimeError("Formal manifest has no recorded command")
+    if not isinstance(code_fingerprint, str) or not code_fingerprint:
+        raise RuntimeError("Formal manifest has no code fingerprint")
+
+    main_indices = [
+        index for index, value in enumerate(command)
+        if Path(str(value)).name == "main.py"
+    ]
+    if len(main_indices) != 1 or main_indices[0] == 0:
+        raise RuntimeError(f"Cannot identify semantic command in manifest: {command}")
+    main_index = main_indices[0]
+    semantic_command = [
+        str(command[main_index - 1]),
+        *[
+            str(value)
+            for value in command[main_index:]
+            if not str(value).startswith("--task2_definition_fingerprint=")
+        ],
+    ]
+    payload = {
+        "command_without_python": semantic_command[1:],
+        "code_fingerprint": code_fingerprint,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def load_formal_paths() -> list[Path]:
     paths: list[Path] = []
-    fingerprints: set[str] = set()
+    run_pairs: set[tuple[str, int]] = set()
+    code_fingerprints: set[str] = set()
+    environment_fingerprints: set[str] = set()
     benchmark_hashes: set[tuple[str, str]] = set()
     for manifest_path in sorted(FORMAL_STATE.glob("seed_*__*.json")):
         manifest = json.loads(manifest_path.read_text())
@@ -471,7 +506,32 @@ def load_formal_paths() -> list[Path]:
         completion = json.loads((path / "run_complete.json").read_text())
         if completion.get("status") != "complete" or completion.get("true_evaluation_count") != 10000:
             raise RuntimeError(f"Invalid formal result: {path}")
-        fingerprints.add(str(completion.get("definition_fingerprint")))
+
+        spec = manifest.get("spec", {})
+        method = str(spec.get("method"))
+        seed = int(spec.get("seed", -1))
+        if completion.get("method") != method or int(completion.get("seed", -1)) != seed:
+            raise RuntimeError(f"Formal manifest/result identity mismatch: {manifest_path}")
+        run_pairs.add((method, seed))
+
+        recorded_definition = manifest.get("definition_fingerprint")
+        completion_definition = completion.get("definition_fingerprint")
+        expected_definition = definition_fingerprint_from_manifest(manifest)
+        if (
+            not isinstance(recorded_definition, str)
+            or recorded_definition != completion_definition
+            or recorded_definition != expected_definition
+        ):
+            raise RuntimeError(f"Formal definition fingerprint mismatch: {manifest_path}")
+
+        code_fingerprint = str(manifest.get("code_fingerprint"))
+        environment_fingerprint = str(manifest.get("environment_fingerprint"))
+        if code_fingerprint != str(completion.get("code_fingerprint")):
+            raise RuntimeError(f"Formal code fingerprint mismatch: {manifest_path}")
+        if environment_fingerprint != str(completion.get("environment_fingerprint")):
+            raise RuntimeError(f"Formal environment fingerprint mismatch: {manifest_path}")
+        code_fingerprints.add(code_fingerprint)
+        environment_fingerprints.add(environment_fingerprint)
         benchmark_hashes.add(
             (
                 str(completion.get("placedb_macro_names_sha256")),
@@ -479,10 +539,16 @@ def load_formal_paths() -> list[Path]:
             )
         )
         paths.append(path)
-    if len(paths) != 10:
-        raise RuntimeError(f"Expected 10 formal runs, found {len(paths)}")
-    if len(fingerprints) != 1 or "None" in fingerprints:
-        raise RuntimeError(f"Formal definition fingerprints differ: {fingerprints}")
+
+    expected_pairs = {(method, seed) for method in ("nsga2", "moead") for seed in range(1, 6)}
+    if run_pairs != expected_pairs:
+        raise RuntimeError(f"Formal run matrix mismatch: {run_pairs}")
+    if len(code_fingerprints) != 1 or "None" in code_fingerprints:
+        raise RuntimeError(f"Formal code fingerprints differ: {code_fingerprints}")
+    if len(environment_fingerprints) != 1 or "None" in environment_fingerprints:
+        raise RuntimeError(
+            f"Formal environment fingerprints differ: {environment_fingerprints}"
+        )
     if len(benchmark_hashes) != 1:
         raise RuntimeError(f"Formal benchmark fingerprints differ: {benchmark_hashes}")
     return paths

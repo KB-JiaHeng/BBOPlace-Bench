@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import unittest
 
 import numpy as np
 
 from experiments.analyze_task2 import (
     deduplicate_by_phenotype,
+    definition_fingerprint_from_manifest,
     displacement_conditioned_diagnostics,
     moead_state_diagnostics,
     moead_slot_occupancy_rows,
@@ -15,6 +18,38 @@ from experiments.analyze_task2 import (
 
 
 class Task2AnalysisTest(unittest.TestCase):
+    def test_manifest_definition_fingerprint_is_per_run_and_wrapper_independent(self):
+        command = [
+            "nice", "-n", "10", "taskset", "-c", "0-19", "/env/python3",
+            "main.py", "--task2_method=nsga2", "--seed=1",
+            "--task2_definition_fingerprint=recorded",
+        ]
+        manifest = {"command": command, "code_fingerprint": "code-v1"}
+        payload = {
+            "command_without_python": ["main.py", "--task2_method=nsga2", "--seed=1"],
+            "code_fingerprint": "code-v1",
+        }
+        expected = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(definition_fingerprint_from_manifest(manifest), expected)
+
+        other_wrapper = dict(manifest)
+        other_wrapper["command"] = [
+            "nice", "-n", "5", "taskset", "-c", "20-39", *command[6:]
+        ]
+        self.assertEqual(
+            definition_fingerprint_from_manifest(other_wrapper), expected
+        )
+
+        other_seed = dict(manifest)
+        other_seed["command"] = [
+            value.replace("--seed=1", "--seed=2") for value in command
+        ]
+        self.assertNotEqual(
+            definition_fingerprint_from_manifest(other_seed), expected
+        )
+
     def test_phenotype_deduplication_precedes_front_analysis(self):
         F = np.asarray([[1.0, 3.0], [1.0, 3.0], [2.0, 2.0], [1e16, 1e16]])
         hashes = np.asarray(["a", "a", "b", "invalid"])
